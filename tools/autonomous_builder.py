@@ -339,6 +339,133 @@ EXACT REQUIRED FILES TO GENERATE (5 files total):
    - Unit tests for NativeActionHandler: timer creation intent extras, note creation flow, SMS confirmation generation.
 5. app/src/test/java/com/edgehybrid/agent/sandbox/HeadlessWebViewSandboxTest.kt
    - Unit tests for HeadlessWebViewSandbox: parameter validation, bridge completion callback, timeout watchdog behavior.
+""",
+    "3A": """### Phase 3A: JEV Protocol, TypeSafe Client & Risk Assessment
+Focus: TypeSafe JEV evaluation models, client, risk classifier, and decision cache.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (4 files total):
+1. app/src/main/java/com/edgehybrid/agent/jev/JevModels.kt
+   - Data classes:
+     data class JevEvaluationRequest(val prompt: String, val proposedAction: String? = null, val context: Map<String, Any?> = emptyMap())
+     data class JevEvaluationResponse(val verdict: String, val riskScore: Int, val isFalsePositive: Boolean, val reasons: List<String>, val suggestedConstraints: List<String> = emptyList())
+     enum class RiskLevel { LOW, MODERATE, HIGH, CRITICAL }
+2. app/src/main/java/com/edgehybrid/agent/jev/JevClient.kt
+   - Ktor HTTP client communicating with TypeSafe JEV verification endpoint with timeout and offline graceful fallback.
+3. app/src/main/java/com/edgehybrid/agent/jev/JevRiskClassifier.kt
+   - Pre-execution risk classifier analyzing tool actions:
+     riskScore >= 70 requires explicit user confirmation.
+     riskScore >= 90 hard rejects dangerous actions (bulk delete, sensitive system settings).
+4. app/src/main/java/com/edgehybrid/agent/jev/JevDecisionCache.kt
+   - In-memory LRU cache storing recent JevEvaluationResponse values by prompt SHA-256 to prevent duplicate network calls.
+""",
+    "3B": """### Phase 3B: Continuous Learning Lessons Ledger
+Focus: Room-backed persistent lessons ledger storing defect observations and injecting constraints into future prompts.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (4 files total):
+1. app/src/main/java/com/edgehybrid/agent/data/local/LessonEntity.kt
+   - Room @Entity(tableName = "lessons_ledger") with id (autoGenerate=true Long), rule: String, category: String, failureContext: String, timestamp: Long = System.currentTimeMillis().
+2. app/src/main/java/com/edgehybrid/agent/data/local/LessonDao.kt
+   - Room @Dao interface:
+     @Insert suspend fun insertLesson(lesson: LessonEntity): Long
+     @Query("SELECT * FROM lessons_ledger ORDER BY timestamp DESC LIMIT :limit") fun getRecentLessons(limit: Int = 10): kotlinx.coroutines.flow.Flow<List<LessonEntity>>
+     @Query("SELECT * FROM lessons_ledger WHERE category = :category ORDER BY timestamp DESC") suspend fun getLessonsByCategory(category: String): List<LessonEntity>
+3. app/src/main/java/com/edgehybrid/agent/learning/LessonsLedgerManager.kt
+   - Manager responsible for recording defect feedback from JEV reviews and persisting actionable constraints.
+4. app/src/main/java/com/edgehybrid/agent/learning/PromptConstraintInjector.kt
+   - Pre-prompt processor that queries top active lessons from LessonsDao and formats a '### Constraints from Past Lessons' block into system prompt.
+""",
+    "3C": """### Phase 3C: Compose Confirmation Dialog & JEV Tests
+Focus: Jetpack Compose UI for high-risk action confirmation, Hilt module, and unit tests for JEV and learning loop.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (4 files total):
+1. app/src/main/java/com/edgehybrid/agent/ui/components/ActionConfirmationDialog.kt
+   - Material 3 Compose AlertDialog for actions flagged with riskScore >= 70, showing risk score, explanation, and Confirm/Cancel buttons.
+2. app/src/main/java/com/edgehybrid/agent/di/PhaseThreeModule.kt
+   - Hilt @Module @InstallIn(SingletonComponent::class) providing JevClient, JevRiskClassifier, JevDecisionCache, LessonsLedgerManager.
+3. app/src/test/java/com/edgehybrid/agent/jev/JevRiskClassifierTest.kt
+   - Unit tests verifying risk categorization: low-risk queries score < 30, SMS/timer score 70-80, destructive operations score >= 90.
+4. app/src/test/java/com/edgehybrid/agent/learning/LessonsLedgerManagerTest.kt
+   - Unit tests verifying continuous learning: simulated failure records lesson, constraint injector formats constraint block into prompt.
+""",
+    "4A": """### Phase 4A: Samsung S Pen BLE Controller & Gestures
+Focus: Bluetooth Low Energy S Pen button events and Air Motion gesture handling for Samsung Galaxy S23 Ultra.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (3 files total):
+1. app/src/main/java/com/edgehybrid/agent/hardware/spen/SPenEvent.kt
+   - Sealed class SPenEvent: SingleClick, DoubleClick, LongPress, AirGesture(val direction: String).
+2. app/src/main/java/com/edgehybrid/agent/hardware/spen/SPenController.kt
+   - S Pen event dispatcher:
+     * SingleClick: toggle voice recording/speech-to-text.
+     * DoubleClick: trigger screen context snapshot.
+     * LongPress: emergency abort/cancel streaming generation.
+3. app/src/main/java/com/edgehybrid/agent/hardware/spen/SPenReceiver.kt
+   - BroadcastReceiver receiving Samsung Air Action system intents and forwarding to SPenController.
+""",
+    "4B": """### Phase 4B: Screen Context & Image Compression
+Focus: Multimodal screen capture helper and bandwidth-optimized JPEG compression for Gemini/Claude vision models.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (3 files total):
+1. app/src/main/java/com/edgehybrid/agent/hardware/vision/ScreenCaptureHelper.kt
+   - MediaProjection / Accessibility screenshot utility capturing the current display buffer as a Bitmap.
+2. app/src/main/java/com/edgehybrid/agent/hardware/vision/ImageCompressor.kt
+   - Compresses raw Bitmap to JPEG (max dimension 1024px, quality 85%, target size < 250 KB) on Dispatchers.Default.
+3. app/src/main/java/com/edgehybrid/agent/hardware/vision/MultimodalPromptEnricher.kt
+   - Converts compressed JPEG byte array into Base64 data URL for multimodal LLM vision message parts.
+""",
+    "4C": """### Phase 4C: Foreground Service & Battery Optimization
+Focus: Android ForegroundService for background execution persistence and Samsung One UI Device Care battery exemption.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (3 files total):
+1. app/src/main/java/com/edgehybrid/agent/service/AgentForegroundService.kt
+   - Android ForegroundService with ongoing notification channel keeping multi-step agent and MCP web tasks alive when screen is off.
+2. app/src/main/java/com/edgehybrid/agent/service/BatteryOptimizationHelper.kt
+   - Helper to check and request ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS to prevent One UI Device Care from freezing agent tasks.
+3. app/src/main/java/com/edgehybrid/agent/di/PhaseFourModule.kt
+   - Hilt @Module providing SPenController, ScreenCaptureHelper, ImageCompressor, and BatteryOptimizationHelper.
+""",
+    "5A": """### Phase 5A: LiteRT / MediaPipe On-Device Engine
+Focus: On-device offline LLM inference using Google MediaPipe Tasks GenAI / LiteRT for Gemma 2B Q4 on Snapdragon NPU.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (3 files total):
+1. app/src/main/java/com/edgehybrid/agent/core/inference/LocalLiteRtEngine.kt
+   - Implements InferenceEngine interface using MediaPipe LlmInference for offline text generation.
+2. app/src/main/java/com/edgehybrid/agent/core/inference/ModelWeightsManager.kt
+   - Manages local storage paths, downloads, and sideloaded `.bin` / `.litertlm` weight files in app internal storage.
+3. app/src/main/java/com/edgehybrid/agent/core/inference/HybridInferenceRouter.kt
+   - Auto-router: detects network availability via ConnectivityManager and routes to LocalLiteRtEngine when offline and CloudInferenceEngine when online.
+""",
+    "5B": """### Phase 5B: On-Device Vector Store & RAG
+Focus: On-device semantic search over user notes and skills using quantized embeddings and cosine similarity.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (4 files total):
+1. app/src/main/java/com/edgehybrid/agent/rag/VectorEmbedding.kt
+   - Data class VectorEmbedding(val id: String, val text: String, val vector: FloatArray) with cosineSimilarity(other: FloatArray): Float.
+2. app/src/main/java/com/edgehybrid/agent/data/local/VectorDao.kt
+   - Room @Dao for storing and querying text chunks and serialized embedding vectors.
+3. app/src/main/java/com/edgehybrid/agent/rag/OnDeviceVectorStore.kt
+   - In-memory / Room hybrid vector database supporting addDocument(id, text, vector) and findTopK(queryVector, k=3).
+4. app/src/main/java/com/edgehybrid/agent/rag/RagContextAugmenter.kt
+   - Takes user prompt, generates query embedding, retrieves top-3 matching chunks, and prepends them as reference context.
+""",
+    "5C": """### Phase 5C: Hybrid Integration & Offline Verification Tests
+Focus: Hilt DI wiring for LiteRT and RAG, plus comprehensive unit tests for offline routing and vector search.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (3 files total):
+1. app/src/main/java/com/edgehybrid/agent/di/PhaseFiveModule.kt
+   - Hilt @Module providing LocalLiteRtEngine, OnDeviceVectorStore, RagContextAugmenter, and HybridInferenceRouter.
+2. app/src/test/java/com/edgehybrid/agent/inference/HybridInferenceRouterTest.kt
+   - Unit tests verifying seamless routing between Cloud and LocalLiteRtEngine based on simulated network states.
+3. app/src/test/java/com/edgehybrid/agent/rag/OnDeviceVectorStoreTest.kt
+   - Unit tests verifying vector similarity ranking, top-k retrieval accuracy, and chunk indexing.
 """
 }
 
@@ -614,29 +741,52 @@ def main():
     llm = CascadingLLMClient(keys, logger, prefer_space_bunny=args.prefer_space_bunny)
     builder = AutonomousPhaseBuilder(llm, logger, max_attempts=args.max_attempts)
 
-    phase_2_subphases = [
-        ("2A", "Room DB & Native Action Handlers"),
-        ("2B", "Headless WebView Sandbox & JS Bridge"),
-        ("2C", "Ktor MCP Client & JSON-RPC Gateway"),
-        ("2D", "Hilt DI, Tool Registry & Phase 2 Unit Tests")
-    ]
+    phase_groups = {
+        "2": [
+            ("2A", "Room DB & Native Action Handlers"),
+            ("2B", "Headless WebView Sandbox & JS Bridge"),
+            ("2C", "Ktor MCP Client & JSON-RPC Gateway"),
+            ("2D", "Hilt DI, Tool Registry & Phase 2 Unit Tests")
+        ],
+        "3": [
+            ("3A", "JEV Protocol, TypeSafe Client & Risk Assessment"),
+            ("3B", "Continuous Learning Lessons Ledger"),
+            ("3C", "Compose Confirmation Dialog & JEV Tests")
+        ],
+        "4": [
+            ("4A", "Samsung S Pen BLE Controller & Gestures"),
+            ("4B", "Screen Context & Image Compression"),
+            ("4C", "Foreground Service & Battery Optimization")
+        ],
+        "5": [
+            ("5A", "LiteRT / MediaPipe On-Device Engine"),
+            ("5B", "On-Device Vector Store & RAG"),
+            ("5C", "Hybrid Integration & Offline Verification Tests")
+        ]
+    }
 
-    all_phases = [
+    all_atomic_phases = [
         ("1", "Production Cloud Engine & Recursive Agentic Loop"),
         ("2A", "Room DB & Native Action Handlers"),
         ("2B", "Headless WebView Sandbox & JS Bridge"),
         ("2C", "Ktor MCP Client & JSON-RPC Gateway"),
         ("2D", "Hilt DI, Tool Registry & Phase 2 Unit Tests"),
-        ("3", "TypeSafe JEV Guardrails & Continuous Learning"),
-        ("4", "Samsung Galaxy S23 Ultra S Pen & Vision"),
-        ("5", "Offline LiteRT & On-Device RAG")
+        ("3A", "JEV Protocol, TypeSafe Client & Risk Assessment"),
+        ("3B", "Continuous Learning Lessons Ledger"),
+        ("3C", "Compose Confirmation Dialog & JEV Tests"),
+        ("4A", "Samsung S Pen BLE Controller & Gestures"),
+        ("4B", "Screen Context & Image Compression"),
+        ("4C", "Foreground Service & Battery Optimization"),
+        ("5A", "LiteRT / MediaPipe On-Device Engine"),
+        ("5B", "On-Device Vector Store & RAG"),
+        ("5C", "Hybrid Integration & Offline Verification Tests")
     ]
 
     if args.phase:
         p_arg = str(args.phase).strip().upper()
-        if p_arg == "2":
-            logger.info("Executing Phase 2 via modular sub-phases: 2A -> 2B -> 2C -> 2D")
-            for sub_id, sub_title in phase_2_subphases:
+        if p_arg in phase_groups:
+            logger.info(f"Executing Phase {p_arg} via modular sub-phases: {[p[0] for p in phase_groups[p_arg]]}")
+            for sub_id, sub_title in phase_groups[p_arg]:
                 success = builder.execute_phase(sub_id, sub_title)
                 if not success:
                     logger.error(f"Stopping execution: Sub-phase {sub_id} failed.")
@@ -644,17 +794,17 @@ def main():
                 time.sleep(2)
             sys.exit(0)
         else:
-            match = next((t for n, t in all_phases if n.upper() == p_arg), None)
+            match = next((t for n, t in all_atomic_phases if n.upper() == p_arg), None)
             if not match:
-                logger.error(f"Unknown phase identifier: {p_arg}. Available: {[p[0] for p in all_phases]}")
+                logger.error(f"Unknown phase identifier: {p_arg}. Available: {[p[0] for p in all_atomic_phases]}")
                 sys.exit(1)
             success = builder.execute_phase(p_arg, match)
             sys.exit(0 if success else 1)
     elif args.all:
-        for p_id, title in all_phases:
+        for p_id, title in all_atomic_phases:
             success = builder.execute_phase(p_id, title)
             if not success:
-                logger.error(f"Stopping execution: Phase {p_id} failed.")
+                logger.error(f"Stopping execution: Sub-phase {p_id} failed.")
                 sys.exit(1)
             time.sleep(3)
         logger.info("ALL PHASES AND SUB-PHASES COMPLETED AND VERIFIED SUCCESSFULLY!")
