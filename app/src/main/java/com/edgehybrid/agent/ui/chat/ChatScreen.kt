@@ -1,42 +1,81 @@
 package com.edgehybrid.agent.ui.chat
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Workspaces
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectionContainer
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.edgehybrid.agent.data.local.ChatMessageEntity
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.edgehybrid.agent.R
+
+@Composable
+fun ChatRoute(
+    viewModel: ChatViewModel = hiltViewModel()
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    ChatScreen(
+        state = state,
+        onSend = viewModel::send,
+        onRetry = viewModel::retryRecovery
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
-    viewModel: ChatViewModel,
-    onNavigateToSettings: () -> Unit,
-    onNavigateToSkills: () -> Unit
+    state: ChatUiState,
+    onSend: (String) -> Unit,
+    onRetry: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    var inputText by remember { mutableStateOf("") }
-    val listState = rememberLazyListState()
+    var draft by rememberSaveable { mutableStateOf("") }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
-    LaunchedEffect(uiState.messages.size, uiState.streamingContent) {
-        if (uiState.messages.isNotEmpty() || uiState.streamingContent.isNotEmpty()) {
-            listState.animateScrollToItem((uiState.messages.size).coerceAtLeast(0))
+    val lastMessageSignature = state.messages.lastOrNull()?.let { message ->
+        "${message.id}:${message.content.length}:${message.deliveryState}:${message.recoveryMessage}"
+    }
+
+    LaunchedEffect(lastMessageSignature, state.messages.size) {
+        if (state.messages.isNotEmpty()) {
+            listState.animateScrollToItem(state.messages.lastIndex)
         }
     }
 
@@ -44,117 +83,140 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            text = "Edge Hybrid Agent",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (uiState.activeModelName.isNotEmpty()) {
-                            Text(
-                                text = "⚡ ${uiState.activeModelName}",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onNavigateToSkills) {
-                        Icon(Icons.Default.Workspaces, contentDescription = "Skills & MCP")
-                    }
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        },
-        bottomBar = {
-            Surface(
-                tonalElevation = 3.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                        .navigationBarsPadding(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextField(
-                        value = inputText,
-                        onValueChange = { inputText = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp),
-                        placeholder = { Text("Ask anything...") },
-                        maxLines = 4,
-                        shape = RoundedCornerShape(24.dp),
-                        colors = TextFieldDefaults.colors(
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
-                        )
+                    Text(
+                        text = stringResource(R.string.chat_title),
+                        fontWeight = FontWeight.SemiBold
                     )
-
-                    FilledIconButton(
-                        onClick = {
-                            if (inputText.isNotBlank() && !uiState.isStreaming) {
-                                val text = inputText
-                                inputText = ""
-                                viewModel.sendMessage(text)
-                            }
-                        },
-                        enabled = inputText.isNotBlank() && !uiState.isStreaming
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
-                    }
                 }
-            }
+            )
         }
-    ) { padding ->
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .background(MaterialTheme.colorScheme.background)
+                .padding(innerPadding)
+                .imePadding()
         ) {
-            if (uiState.error != null) {
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    modifier = Modifier.fillMaxWidth().padding(8.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = "Error: ${uiState.error}",
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(12.dp),
-                        fontSize = 13.sp
-                    )
-                }
+            if (state.isGenerating) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .fillMaxSize()
+                    .weight(1f)
+                    .fillMaxWidth()
                     .padding(horizontal = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(vertical = 12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(uiState.messages, key = { it.id }) { message ->
-                    MessageBubble(message = message)
+                items(
+                    items = state.messages,
+                    key = ChatMessageUi::id
+                ) { message ->
+                    MessageBubble(
+                        message = message,
+                        onRetry = onRetry
+                    )
+                }
+            }
+
+            state.errorMessage?.let { errorMessage ->
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = errorMessage,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            MessageComposer(
+                draft = draft,
+                enabled = !state.isGenerating,
+                onDraftChanged = { draft = it },
+                onSend = {
+                    if (draft.isNotBlank() && !state.isGenerating) {
+                        onSend(draft)
+                        draft = ""
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessageBubble(
+    message: ChatMessageUi,
+    onRetry: () -> Unit
+) {
+    val isUser = message.role == ChatMessageRole.USER
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) {
+            Arrangement.End
+        } else {
+            Arrangement.Start
+        }
+    ) {
+        Surface(
+            color = if (isUser) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainer
+            },
+            contentColor = if (isUser) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier
+                .fillMaxWidth(0.90f)
+                .widthIn(max = 620.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(
+                    horizontal = 16.dp,
+                    vertical = 12.dp
+                )
+            ) {
+                SelectionContainer {
+                    Text(
+                        text = message.content,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.verticalScroll(rememberScrollState())
+                    )
                 }
 
-                if (uiState.isStreaming && uiState.streamingContent.isNotEmpty()) {
-                    item {
-                        AssistantStreamingBubble(
-                            content = uiState.streamingContent,
-                            modelName = uiState.activeModelName
-                        )
+                if (message.toolActivities.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    message.toolActivities.forEach { activity ->
+                        ToolActivityRow(activity)
                     }
+                }
+
+                if (
+                    message.deliveryState == MessageDeliveryState.RECOVERY_REQUIRED &&
+                    !stateIsGenerating(message)
+                ) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    RecoveryAction(
+                        message = message.recoveryMessage
+                            ?: stringResource(R.string.recovery_required),
+                        onRetry = onRetry
+                    )
                 }
             }
         }
@@ -162,74 +224,114 @@ fun ChatScreen(
 }
 
 @Composable
-fun MessageBubble(message: ChatMessageEntity) {
-    val isUser = message.role == "user"
-    val alignment = if (isUser) Alignment.End else Alignment.Start
-    val bgColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+private fun ToolActivityRow(activity: ToolActivityUi) {
+    val label = when (activity.status) {
+        ToolActivityStatus.RUNNING ->
+            stringResource(R.string.tool_running, activity.toolName)
 
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = alignment
+        ToolActivityStatus.SUCCEEDED ->
+            stringResource(R.string.tool_completed, activity.toolName)
+
+        ToolActivityStatus.FAILED ->
+            stringResource(R.string.tool_failed, activity.toolName)
+    }
+
+    Text(
+        text = "• $label",
+        style = MaterialTheme.typography.labelMedium,
+        color = if (activity.status == ToolActivityStatus.FAILED) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    )
+}
+
+@Composable
+private fun RecoveryAction(
+    message: String,
+    onRetry: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = MaterialTheme.shapes.medium
     ) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 320.dp)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 16.dp,
-                        topEnd = 16.dp,
-                        bottomStart = if (isUser) 16.dp else 4.dp,
-                        bottomEnd = if (isUser) 4.dp else 16.dp
-                    )
-                )
-                .background(bgColor)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = message.content,
-                color = textColor,
-                fontSize = 15.sp,
-                lineHeight = 20.sp
+                text = message,
+                style = MaterialTheme.typography.bodyMedium
             )
-        }
-
-        if (!isUser && message.latencyMs > 0) {
-            Text(
-                text = "${message.modelUsed ?: "Local"} • ${message.latencyMs}ms",
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.padding(top = 2.dp, start = 4.dp)
-            )
+            Button(
+                onClick = onRetry
+            ) {
+                Text(text = stringResource(R.string.retry))
+            }
         }
     }
 }
 
 @Composable
-fun AssistantStreamingBubble(content: String, modelName: String) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.Start
+private fun MessageComposer(
+    draft: String,
+    enabled: Boolean,
+    onDraftChanged: (String) -> Unit,
+    onSend: () -> Unit
+) {
+    Surface(
+        tonalElevation = 3.dp,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .widthIn(max = 320.dp)
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = "$content ▌",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 15.sp,
-                lineHeight = 20.sp
+            OutlinedTextField(
+                value = draft,
+                onValueChange = onDraftChanged,
+                modifier = Modifier.weight(1f),
+                enabled = enabled,
+                placeholder = {
+                    Text(text = stringResource(R.string.chat_input_hint))
+                },
+                maxLines = 5,
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Send
+                ),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        if (draft.isNotBlank() && enabled) {
+                            onSend()
+                        }
+                    }
+                )
             )
+
+            Button(
+                onClick = onSend,
+                enabled = enabled && draft.isNotBlank()
+            ) {
+                if (stateIsGeneratingFromButton(enabled)) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text(text = stringResource(R.string.send))
+                }
+            }
         }
-        Text(
-            text = "Streaming from $modelName...",
-            fontSize = 10.sp,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 2.dp, start = 4.dp)
-        )
     }
 }
+
+private fun stateIsGenerating(message: ChatMessageUi): Boolean =
+    message.deliveryState == MessageDeliveryState.STREAMING
+
+private fun stateIsGeneratingFromButton(enabled: Boolean): Boolean = !enabled

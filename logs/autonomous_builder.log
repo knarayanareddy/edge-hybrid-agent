@@ -1,0 +1,141 @@
+[2026-09-28 12:01:55] [INFO] 
+======================================================================
+STARTING EXECUTION: Phase 1 - Production Cloud Engine & Recursive Agentic Loop
+======================================================================
+[2026-09-28 12:01:55] [INFO] [Phase 1] Attempt 1/3...
+[2026-09-28 12:01:55] [INFO] [Phase 1] Requesting synthesis from LLM cascade...
+[2026-09-28 12:02:01] [WARNING] Model gemini-3.8-flash HTTP 503: {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are u
+[2026-09-28 12:02:17] [INFO] [Phase 1] Synthesis received from provider: gemini/gemini-3.5-flash-lite
+[2026-09-28 12:02:17] [ERROR] [Phase 1] Failed to parse JSON response: Invalid \escape: line 4 column 2626 (char 8645)
+[2026-09-28 12:02:17] [WARNING] [Phase 1] No files produced on attempt 1. Retrying...
+[2026-09-28 12:02:17] [INFO] [Phase 1] Attempt 2/3...
+[2026-09-28 12:02:17] [INFO] [Phase 1] Requesting synthesis from LLM cascade...
+[2026-09-28 12:02:21] [WARNING] Model gemini-3.8-flash HTTP 503: {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are u
+[2026-09-28 12:02:36] [INFO] [Phase 1] Synthesis received from provider: gemini/gemini-3.5-flash-lite
+[2026-09-28 12:02:36] [ERROR] [Phase 1] Failed to parse JSON response: Invalid \escape: line 3 column 2410 (char 5234)
+[2026-09-28 12:02:36] [WARNING] [Phase 1] No files produced on attempt 2. Retrying...
+[2026-09-28 12:02:36] [INFO] [Phase 1] Attempt 3/3...
+[2026-09-28 12:02:36] [INFO] [Phase 1] Requesting synthesis from LLM cascade...
+[2026-09-28 12:02:40] [WARNING] Model gemini-3.8-flash HTTP 503: {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are u
+[2026-09-28 12:02:52] [INFO] [Phase 1] Synthesis received from provider: gemini/gemini-3.5-flash-lite
+[2026-09-28 12:02:52] [ERROR] [Phase 1] Failed to parse JSON response: Invalid \escape: line 3 column 1488 (char 3321)
+[2026-09-28 12:02:52] [WARNING] [Phase 1] No files produced on attempt 3. Retrying...
+[2026-09-28 12:02:52] [ERROR] [Phase 1] Exhausted attempts without reaching passing score.
+[2026-09-28 12:03:36] [INFO] 
+======================================================================
+STARTING EXECUTION: Phase 1 - Production Cloud Engine & Recursive Agentic Loop
+======================================================================
+[2026-09-28 12:03:36] [INFO] [Phase 1] Attempt 1/3...
+[2026-09-28 12:03:36] [INFO] [Phase 1] Requesting synthesis from LLM cascade...
+[2026-09-28 12:03:40] [WARNING] Model gemini-3.8-flash HTTP 503: {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are u
+[2026-09-28 12:04:25] [WARNING] Model gemini-3.5-flash-lite request failed: The read operation timed out
+[2026-09-28 12:05:05] [INFO] 
+======================================================================
+STARTING EXECUTION: Phase 1 - Production Cloud Engine & Recursive Agentic Loop
+======================================================================
+[2026-09-28 12:05:05] [INFO] [Phase 1] Attempt 1/3...
+[2026-09-28 12:05:05] [INFO] [Phase 1] Requesting synthesis from LLM cascade...
+[2026-09-28 12:05:08] [WARNING] Model gemini-3.8-flash HTTP 503: {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are u
+[2026-09-28 12:05:26] [INFO] [Phase 1] Synthesis received from provider: gemini/gemini-3.5-flash-lite
+[2026-09-28 12:05:26] [INFO] [Phase 1] Extracted 7 file(s): ['com/edge/hybridagent/data/model/AgentModels.kt', 'com/edge/hybridagent/domain/mcp/McpClient.kt', 'com/edge/hybridagent/data/remote/CloudInferenceEngine.kt', 'com/edge/hybridagent/domain/agent/AgentOrchestrator.kt', 'com/edge/hybridagent/ui/chat/ChatViewModel.kt', 'com/edge/hybridagent/ui/chat/ChatScreen.kt', 'com/edge/hybridagent/data/remote/CloudInferenceEngineTest.kt']
+[2026-09-28 12:05:28] [WARNING] Model gemini-3.8-flash HTTP 503: {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are u
+[2026-09-28 12:05:29] [INFO] [Phase 1] Self-Review Score: 85/100. Passes: False
+[2026-09-28 12:05:29] [WARNING] [Phase 1] Self-Review rejected output (Score 85). Flaws: ['Syntax error in CloudInferenceEngine.kt: `companion0: private const val MAX_RETRIES = 3` contains a typo (`companion0:` instead of `companion object`), which will prevent compilation.']
+[2026-09-28 12:05:29] [INFO] [Phase 1] Attempt 2/3...
+[2026-09-28 12:05:29] [INFO] [Phase 1] Requesting synthesis from LLM cascade...
+[2026-09-28 12:05:43] [WARNING] Model gemini-3.8-flash HTTP 503: {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are u
+[2026-09-28 12:06:04] [INFO] [Phase 1] Synthesis received from provider: gemini/gemini-3.5-flash-lite
+[2026-09-28 12:06:05] [INFO] [Phase 1] Extracted 5 file(s): ['app/src/main/java/com/edge/hybrid/agent/data/remote/CloudInferenceEngine.kt', 'app/src/main/java/com/edge/hybrid/agent/domain/orchestrator/AgentOrchestrator.kt', 'app/src/main/java/com/edge/hybrid/agent/domain/orchestrator/ToolRegistry.kt', 'app/src/main/java/com/edge/hybrid/agent/presentation/chat/ChatViewModel.kt', 'app/src/main/java/com/edge/hybrid/agent/presentation/chat/ChatScreen.kt']
+[2026-09-28 12:06:05] [WARNING] [Phase 1] Static check failed: ["app/src/main/java/com/edge/hybrid/agent/presentation/chat/ChatScreen.kt: contains forbidden stub/placeholder 'placeholder'"]
+[2026-09-28 12:06:05] [INFO] [Phase 1] Attempt 3/3...
+[2026-09-28 12:06:05] [INFO] [Phase 1] Requesting synthesis from LLM cascade...
+[2026-09-28 12:06:14] [WARNING] Model gemini-3.8-flash HTTP 503: {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are u
+[2026-09-28 12:06:34] [INFO] [Phase 1] Synthesis received from provider: gemini/gemini-3.5-flash-lite
+[2026-09-28 12:06:34] [INFO] [Phase 1] Extracted 5 file(s): ['app/src/main/java/com/edge/hybrid/agent/domain/model/Telemetry.kt', 'app/src/main/java/com/edge/hybrid/agent/data/remote/CloudInferenceEngine.kt', 'app/src/main/java/com/edge/hybrid/agent/domain/agent/AgentOrchestrator.kt', 'app/src/main/java/com/edge/hybrid/agent/presentation/chat/ChatViewModel.kt', 'app/src/main/java/com/edge/hybrid/agent/presentation/chat/ChatScreen.kt']
+[2026-09-28 12:06:34] [WARNING] [Phase 1] Static check failed: ["app/src/main/java/com/edge/hybrid/agent/presentation/chat/ChatViewModel.kt: contains forbidden stub/placeholder 'placeholder'", "app/src/main/java/com/edge/hybrid/agent/presentation/chat/ChatScreen.kt: contains forbidden stub/placeholder 'placeholder'"]
+[2026-09-28 12:06:34] [ERROR] [Phase 1] Exhausted attempts without reaching passing score.
+[2026-09-28 12:08:02] [INFO] 
+======================================================================
+STARTING EXECUTION: Phase 1 - Production Cloud Engine & Recursive Agentic Loop
+======================================================================
+[2026-09-28 12:08:02] [INFO] [Phase 1] Attempt 1/3...
+[2026-09-28 12:08:02] [INFO] [Phase 1] Requesting synthesis from LLM cascade...
+[2026-09-28 12:18:16] [INFO] [Phase 1] Synthesis received from provider: openrouter/stealth/space-bunny-alpha
+[2026-09-28 12:18:16] [INFO] [Phase 1] Extracted 24 file(s): ['settings.gradle.kts', 'build.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'app/build.gradle.kts', 'app/proguard-rules.pro', 'app/src/main/AndroidManifest.xml', 'app/src/main/res/values/strings.xml', 'app/src/main/res/values/themes.xml', 'app/src/main/java/com/edgehybrid/agent/EdgeHybridApplication.kt', 'app/src/main/java/com/edgehybrid/agent/Models.kt', 'app/src/main/java/com/edgehybrid/agent/SseDecoder.kt', 'app/src/main/java/com/edgehybrid/agent/CloudInferenceEngine.kt', 'app/src/main/java/com/edgehybrid/agent/ToolContracts.kt', 'app/src/main/java/com/edgehybrid/agent/StreamableHttpMcpClient.kt', 'app/src/main/java/com/edgehybrid/agent/AgentOrchestrator.kt', 'app/src/main/java/com/edgehybrid/agent/ChatDatabase.kt', 'app/src/main/java/com/edgehybrid/agent/ChatRepository.kt', 'app/src/main/java/com/edgehybrid/agent/AppModule.kt', 'app/src/main/java/com/edgehybrid/agent/ChatViewModel.kt', 'app/src/main/java/com/edgehybrid/agent/ChatScreen.kt', 'app/src/main/java/com/edgehybrid/agent/MainActivity.kt', 'app/src/test/java/com/edgehybrid/agent/CloudInferenceEngineTest.kt', 'app/src/test/java/com/edgehybrid/agent/AgentOrchestratorTest.kt']
+[2026-09-28 12:18:16] [WARNING] [Phase 1] Static check failed: ['app/src/main/res/values/strings.xml: file content is suspiciously short (118 bytes)']
+[2026-09-28 12:18:16] [INFO] [Phase 1] Attempt 2/3...
+[2026-09-28 12:18:16] [INFO] [Phase 1] Requesting synthesis from LLM cascade...
+[2026-09-28 12:29:53] [INFO] [Phase 1] Synthesis received from provider: openrouter/stealth/space-bunny-alpha
+[2026-09-28 12:29:53] [INFO] [Phase 1] Extracted 33 file(s): ['settings.gradle.kts', 'build.gradle.kts', 'gradle.properties', 'app/build.gradle.kts', 'app/proguard-rules.pro', 'app/src/main/AndroidManifest.xml', 'app/src/main/res/values/strings.xml', 'app/src/main/res/values/themes.xml', 'app/src/main/res/values-night/themes.xml', 'app/src/main/java/com/edgehybrid/agent/EdgeHybridApplication.kt', 'app/src/main/java/com/edgehybrid/agent/domain/AgentModels.kt', 'app/src/main/java/com/edgehybrid/agent/domain/ConversationStore.kt', 'app/src/main/java/com/edgehybrid/agent/domain/Resilience.kt', 'app/src/main/java/com/edgehybrid/agent/data/ChatMessageEntity.kt', 'app/src/main/java/com/edgehybrid/agent/data/InferenceTelemetryEntity.kt', 'app/src/main/java/com/edgehybrid/agent/data/ChatMessageDao.kt', 'app/src/main/java/com/edgehybrid/agent/data/InferenceTelemetryDao.kt', 'app/src/main/java/com/edgehybrid/agent/data/ChatDatabase.kt', 'app/src/main/java/com/edgehybrid/agent/data/RoomConversationStore.kt', 'app/src/main/java/com/edgehybrid/agent/data/RoomTelemetrySink.kt', 'app/src/main/java/com/edgehybrid/agent/cloud/CloudInferenceEngine.kt', 'app/src/main/java/com/edgehybrid/agent/orchestrator/AgentOrchestrator.kt', 'app/src/main/java/com/edgehybrid/agent/tools/WeatherSkillLoader.kt', 'app/src/main/java/com/edgehybrid/agent/tools/HttpMcpClient.kt', 'app/src/main/java/com/edgehybrid/agent/tools/AgentToolCatalog.kt', 'app/src/main/java/com/edgehybrid/agent/di/AppModule.kt', 'app/src/main/java/com/edgehybrid/agent/di/DomainBindingsModule.kt', 'app/src/main/java/com/edgehybrid/agent/ui/ChatViewModel.kt', 'app/src/main/java/com/edgehybrid/agent/ui/ChatScreen.kt', 'app/src/main/java/com/edgehybrid/agent/ui/theme/Theme.kt', 'app/src/main/java/com/edgehybrid/agent/MainActivity.kt', 'app/src/test/java/com/edgehybrid/agent/cloud/CloudInferenceEngineTest.kt', 'app/src/test/java/com/edgehybrid/agent/orchestrator/AgentOrchestratorTest.kt']
+[2026-09-28 12:38:01] [INFO] [Phase 1] Self-Review Score: 32/100. Passes: False
+[2026-09-28 12:38:01] [WARNING] [Phase 1] Self-Review rejected output (Score 32). Flaws: ['The project has multiple build blockers. WeatherSkillLoader contains invalid Kotlin: `override fun definitions(): List<ToolDefinition = listOf(` is missing the closing return-type parenthesis.', 'CloudInferenceEngine has a type mismatch: ParsedChunk contains the nested CloudInferenceEngine.ToolCallFragment, while ToolCallAccumulator.add expects CloudToolCallFragment, an alias for a different top-level class.', 'ChatViewModel imports AgentOrchestrator from `com.edgehybrid.agent.domain`, but the class is in `com.edgehybrid.agent.orchestrator`. ChatScreen also lacks the lifecycle `collectAsStateWithLifecycle` and Compose `getValue` imports.', 'Hilt cannot construct the concrete parameters used by the clock and delay bindings. SystemMonotonicClock and RealSuspendDelay are objects without injectable constructors or explicit providers, so the @Binds graph is incomplete.', 'The custom `emitToFlow` and `emit` helpers invoke a FlowCollector extension from member functions without a FlowCollector receiver. They are not a valid way for those helpers to emit into the flow created by their callers.', 'Tool results are never persisted. executeTool returns a TOOL ChatMessage, but the caller only adds it to the in-memory history. The included AgentOrchestratorTest expects two persisted TOOL messages and will receive zero after the compilation problems are fixed.', 'Persisting assistant messages containing tool_calls without their matching tool results creates a dangling tool-call history. OpenAI-compatible APIs can reject the next request. This also occurs when the sixth iteration emits tool calls because the assistant tool-call message is saved before the loop stops without executing or persisting results.', 'SSE completion is detected using `receivedFrame` rather than a valid terminal event. Any clean EOF after one frame is accepted as success, even without `[DONE]` or a terminal finish reason, so a mid-sentence disconnect can be saved as a final answer. An immediate `[DONE]` also produces a successful empty completion.', 'Automatic continuation state is persisted even when recovery is abandoned. Partial assistant messages and synthetic continuation user messages remain in future history, potentially duplicating the final text or causing later turns to continue an abandoned response.', "Several conversation-store operations are outside the orchestrator's recovery handling. Failures appending system, assistant, or final messages escape the flow, skip telemetry finalization, and are reported by ChatViewModel as an unknown internal error rather than a storage recovery state.", 'The retry status is not cleared when recovered text starts streaming. After a 429/503 retry, a normal text answer can continue displaying the stale `Provider retry scheduled` status until the entire response completes.', 'The required airplane-mode UI verification is absent. There is no ChatViewModel or Compose test proving that a mid-stream network failure becomes a recovery card and retry chip without a crash; the network test only exercises the engine exception path.', 'The weather/Fahrenheit test scripts the desired sequence with fake model and tool implementations. It does not exercise CloudInferenceEngine and WeatherSkillLoader together, MCP routing, persistence, or ChatScreen, so it cannot establish the requested end-to-end one-bubble behavior.', 'No explicit IO dispatcher boundary is provided. The orchestrator and tool execution are invoked from viewModelScope, and generic SkillLoader or McpClient implementations are not forced off the caller/Main context. Ktor and Room are nonblocking today, but result parsing and future blocking tool implementations can run on the UI thread.', 'HttpMcpClient sets `initialized = true` before loadTools completes. If tool discovery fails, later calls skip initialization and reuse empty or stale bindings, while AgentToolCatalog silently converts discovery failures into an empty tool list instead of a recoverable state.', 'The cloud API key is compiled into BuildConfig and therefore recoverable from the APK. A production client should use a backend proxy or a user-specific secure authentication flow rather than embedding a provider secret.']
+[2026-09-28 12:38:01] [INFO] [Phase 1] Attempt 3/3...
+[2026-09-28 12:38:01] [INFO] [Phase 1] Requesting synthesis from LLM cascade...
+[2026-09-28 12:51:51] [INFO] [Phase 1] Synthesis received from provider: openrouter/stealth/space-bunny-alpha
+[2026-09-28 12:51:51] [INFO] [Phase 1] Extracted 34 file(s): ['settings.gradle.kts', 'build.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'app/build.gradle.kts', 'app/proguard-rules.pro', 'app/src/main/AndroidManifest.xml', 'app/src/main/res/values/strings.xml', 'app/src/main/res/values/themes.xml', 'app/src/main/res/values-night/themes.xml', 'app/src/main/res/xml/network_security_config.xml', 'app/src/main/java/com/edgehybrid/agent/domain/AgentModels.kt', 'app/src/main/java/com/edgehybrid/agent/domain/Ports.kt', 'app/src/main/java/com/edgehybrid/agent/data/ChatMessageEntity.kt', 'app/src/main/java/com/edgehybrid/agent/data/ChatMessageDao.kt', 'app/src/main/java/com/edgehybrid/agent/data/ChatDatabase.kt', 'app/src/main/java/com/edgehybrid/agent/data/ChatThreadStore.kt', 'app/src/main/java/com/edgehybrid/agent/network/CloudProtocol.kt', 'app/src/main/java/com/edgehybrid/agent/network/CloudInferenceEngine.kt', 'app/src/main/java/com/edgehybrid/agent/network/InjectedCloudInferenceEngine.kt', 'app/src/main/java/com/edgehybrid/agent/orchestrator/AgentOrchestrator.kt', 'app/src/main/java/com/edgehybrid/agent/skills/AgentToolCatalog.kt', 'app/src/main/java/com/edgehybrid/agent/skills/WeatherSkillLoader.kt', 'app/src/main/java/com/edgehybrid/agent/mcp/HttpMcpClient.kt', 'app/src/main/java/com/edgehybrid/agent/security/SecureCloudSession.kt', 'app/src/main/java/com/edgehybrid/agent/di/Qualifiers.kt', 'app/src/main/java/com/edgehybrid/agent/di/SystemBindings.kt', 'app/src/main/java/com/edgehybrid/agent/di/DataModule.kt', 'app/src/main/java/com/edgehybrid/agent/EdgeHybridApplication.kt', 'app/src/main/java/com/edgehybrid/agent/ui/ChatViewModel.kt', 'app/src/main/java/com/edgehybrid/agent/ui/ChatScreen.kt', 'app/src/main/java/com/edgehybrid/agent/ui/theme/Theme.kt', 'app/src/main/java/com/edgehybrid/agent/MainActivity.kt', 'app/src/test/java/com/edgehybrid/agent/network/CloudInferenceEngineTest.kt']
+[2026-09-28 12:51:51] [WARNING] [Phase 1] Static check failed: ['app/proguard-rules.pro: file content is suspiciously short (140 bytes)', 'app/src/main/res/values/strings.xml: file content is suspiciously short (118 bytes)']
+[2026-09-28 12:51:51] [ERROR] [Phase 1] Exhausted attempts without reaching passing score.
+[2026-09-28 13:28:06] [INFO] 
+======================================================================
+STARTING EXECUTION: Phase 1 - Production Cloud Engine & Recursive Agentic Loop
+======================================================================
+[2026-09-28 13:28:06] [INFO] [Phase 1] Attempt 1/3...
+[2026-09-28 13:28:06] [INFO] [Phase 1] Requesting synthesis from LLM cascade...
+[2026-09-28 13:39:18] [INFO] [Phase 1] Synthesis received from provider: openrouter/stealth/space-bunny-alpha
+[2026-09-28 13:39:18] [INFO] [Phase 1] Extracted 26 file(s): ['settings.gradle.kts', 'build.gradle.kts', 'gradle/libs.versions.toml', 'app/build.gradle.kts', 'app/proguard-rules.pro', 'app/src/main/AndroidManifest.xml', 'app/src/main/res/values/strings.xml', 'app/src/main/res/values/themes.xml', 'app/src/main/res/values-night/themes.xml', 'app/src/main/java/com/edgehybrid/agent/data/model/ChatProtocol.kt', 'app/src/main/java/com/edgehybrid/agent/agent/AgentEvents.kt', 'app/src/main/java/com/edgehybrid/agent/agent/AgentPolicy.kt', 'app/src/main/java/com/edgehybrid/agent/network/SseFrameDecoder.kt', 'app/src/main/java/com/edgehybrid/agent/agent/CloudInferenceEngine.kt', 'app/src/main/java/com/edgehybrid/agent/tool/SkillLoader.kt', 'app/src/main/java/com/edgehybrid/agent/tool/McpClient.kt', 'app/src/main/java/com/edgehybrid/agent/tool/ToolGateway.kt', 'app/src/main/java/com/edgehybrid/agent/agent/AgentOrchestrator.kt', 'app/src/main/java/com/edgehybrid/agent/di/AgentModule.kt', 'app/src/main/java/com/edgehybrid/agent/EdgeHybridApplication.kt', 'app/src/main/java/com/edgehybrid/agent/MainActivity.kt', 'app/src/main/java/com/edgehybrid/agent/ui/chat/ChatViewModel.kt', 'app/src/main/java/com/edgehybrid/agent/ui/chat/ChatScreen.kt', 'app/src/test/java/com/edgehybrid/agent/agent/CloudInferenceEngineTest.kt', 'app/src/test/java/com/edgehybrid/agent/agent/AgentOrchestratorTest.kt', 'app/src/test/java/com/edgehybrid/agent/ui/chat/ChatViewModelTest.kt']
+[2026-09-28 13:53:03] [WARNING] Model gemini-3.8-flash HTTP 503: {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are u
+[2026-09-28 13:53:05] [INFO] [Phase 1] Self-Review Score: 100/100. Passes: True
+[2026-09-28 13:53:05] [INFO] [Phase 1] ACCEPTED by Self-Evaluation! Writing code to disk...
+[2026-09-28 13:53:05] [INFO] Wrote file: settings.gradle.kts (334 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: build.gradle.kts (307 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: gradle/libs.versions.toml (3053 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/build.gradle.kts (3802 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/proguard-rules.pro (489 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/AndroidManifest.xml (933 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/res/values/strings.xml (771 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/res/values/themes.xml (567 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/res/values-night/themes.xml (562 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/data/model/ChatProtocol.kt (2849 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/agent/AgentEvents.kt (1590 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/agent/AgentPolicy.kt (1379 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/network/SseFrameDecoder.kt (1124 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/agent/CloudInferenceEngine.kt (19656 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/tool/SkillLoader.kt (10054 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/tool/McpClient.kt (10836 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/tool/ToolGateway.kt (3007 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/agent/AgentOrchestrator.kt (11167 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/di/AgentModule.kt (3383 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/EdgeHybridApplication.kt (163 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/MainActivity.kt (527 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/ui/chat/ChatViewModel.kt (10804 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/main/java/com/edgehybrid/agent/ui/chat/ChatScreen.kt (11208 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/test/java/com/edgehybrid/agent/agent/CloudInferenceEngineTest.kt (9791 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/test/java/com/edgehybrid/agent/agent/AgentOrchestratorTest.kt (11311 chars)
+[2026-09-28 13:53:05] [INFO] Wrote file: app/src/test/java/com/edgehybrid/agent/ui/chat/ChatViewModelTest.kt (3964 chars)

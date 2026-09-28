@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Edge Hybrid Agent</string>
+    <string name="chat_title">Edge Agent</string>
+    <string name="chat_input_hint">Ask a question or request a tool action</string>
+    <string name="send">Send</string>
+    <string name="retry">Retry</string>
+    <string name="recovering_connection">Reconnecting and continuing the interrupted response…</string>
+    <string name="recovery_required">The connection was interrupted. Retry to continue from the partial response.</string>
+    <string name="tool_running">Running %1$s</string>
+    <string name="tool_completed">Completed %1$s</string>
+    <string name="tool_failed">Failed %1$s</string>
+    <string name="generating">Generating</string>
+</resources>
