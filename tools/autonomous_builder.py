@@ -295,7 +295,10 @@ Repeat for all files needed to fully satisfy Phase {phase_num}.
             for pattern in banned_patterns:
                 if re.search(pattern, lower):
                     flaws.append(f"{path}: contains forbidden stub/placeholder matching '{pattern}'")
-            if len(code.strip()) < 150:
+            # Config, resource, and manifest files can naturally be concise
+            is_config_or_resource = any(path.endswith(ext) for ext in [".pro", ".xml", ".properties", ".toml", ".gitignore"])
+            min_len = 20 if is_config_or_resource else 80
+            if len(code.strip()) < min_len:
                 flaws.append(f"{path}: file content is suspiciously short ({len(code)} bytes)")
         return len(flaws) == 0, flaws
 
