@@ -234,6 +234,115 @@ class CascadingLLMClient:
         return self._call_gemini(prompt, system, json_mode, max_retries=2)
 
 
+SUBPHASE_SPECS = {
+    "2A": """### Phase 2A: Room DB & Native Action Handlers
+Focus: Implement persistent local note storage and native Android system action dispatchers.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (5 files total):
+1. app/src/main/java/com/edgehybrid/agent/data/local/NoteEntity.kt
+   - Room @Entity(tableName = "notes") with data class NoteEntity(
+       @PrimaryKey(autoGenerate = true) val id: Long = 0,
+       val title: String,
+       val content: String,
+       val timestamp: Long = System.currentTimeMillis()
+     )
+2. app/src/main/java/com/edgehybrid/agent/data/local/NoteDao.kt
+   - Room @Dao interface with:
+     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertNote(note: NoteEntity): Long
+     @Query("SELECT * FROM notes ORDER BY timestamp DESC") fun getAllNotes(): kotlinx.coroutines.flow.Flow<List<NoteEntity>>
+     @Delete suspend fun deleteNote(note: NoteEntity): Int
+3. app/src/main/java/com/edgehybrid/agent/nativeactions/NativeTool.kt
+   - Sealed class / enum NativeTool for system tools:
+     CREATE_CALENDAR_EVENT("create_calendar_event", "Creates an event in the system calendar"),
+     CREATE_QUICK_NOTE("create_quick_note", "Saves a quick note into local Room database"),
+     SET_TIMER("set_timer", "Sets a countdown timer via system AlarmClock"),
+     SEND_SMS("send_sms", "Prepares or sends an SMS message (requires explicit confirmation)"),
+     TOGGLE_FLASHLIGHT("toggle_flashlight", "Toggles device camera torch on or off")
+   - Includes parameter schema descriptions formatted as JSON schemas with required arrays.
+4. app/src/main/java/com/edgehybrid/agent/nativeactions/ActionConfirmation.kt
+   - Data class ActionConfirmation(val id: String, val tool: String, val summary: String, val params: Map<String, Any>) for sensitive actions requiring explicit user consent.
+5. app/src/main/java/com/edgehybrid/agent/nativeactions/NativeActionHandler.kt
+   - Injected with '@ApplicationContext private val context: Context', 'private val noteDao: NoteDao'.
+   - All background work runs on withContext(Dispatchers.IO).
+   - createCalendarEvent: Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI).putExtra(Events.TITLE, title)...
+   - createQuickNote: inserts NoteEntity into noteDao.
+   - setTimer: Intent(AlarmClock.ACTION_SET_TIMER).putExtra(AlarmClock.EXTRA_LENGTH, seconds).putExtra(AlarmClock.EXTRA_MESSAGE, message).putExtra(AlarmClock.EXTRA_SKIP_UI, true).
+   - prepareSms: generates ActionConfirmation or launches Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phone")).
+   - toggleFlashlight: CameraManager on context.getSystemService(Context.CAMERA_SERVICE).
+""",
+    "2B": """### Phase 2B: Headless WebView Sandbox & JavaScript Bridge
+Focus: Implement secure, isolated execution of JavaScript starter skills in a headless WebView.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (6 files total):
+1. app/src/main/java/com/edgehybrid/agent/sandbox/ScriptSandbox.kt
+   - Interface: suspend fun executeScript(scriptName: String, inputJson: String, networkOrigins: List<String> = emptyList()): Result<String>
+2. app/src/main/java/com/edgehybrid/agent/sandbox/AndroidSandboxHostBridge.kt
+   - Thread-safe class with @JavascriptInterface methods:
+     @JavascriptInterface fun complete(resultJson: String)
+     @JavascriptInterface fun fail(errorMessage: String)
+   - Resumes the suspended coroutine continuation safely without race conditions.
+3. app/src/main/java/com/edgehybrid/agent/sandbox/HeadlessWebViewSandbox.kt
+   - Implements ScriptSandbox.
+   - Injected with '@ApplicationContext private val context: Context'.
+   - STRICT IMPORT: import android.webkit.CookieManager (NEVER import android.view.CookieManager).
+   - Uses WebViewAssetLoader with shouldInterceptRequest blocking unlisted hosts, STUN/WebRTC, and private IP ranges.
+   - Strict 5,000ms watchdog using kotlinx.coroutines.withTimeoutOrNull(5000).
+   - Sets up window.__edgeRun(input, networkOrigins) and window.__edgeHost.
+4. app/src/main/assets/skills/calculator.js
+   - Safe math expression evaluator (token-based or operator precedence, zero dangerous eval), reads global input, calls window.__edgeHost.complete(JSON.stringify({result: answer})).
+5. app/src/main/assets/skills/device_info.js
+   - Reads device information via host bridge and returns JSON summary via window.__edgeHost.complete(...).
+6. app/src/main/assets/skills/web_extract.js
+   - Fetches allowlisted URL markdown content and completes via window.__edgeHost.complete(...).
+""",
+    "2C": """### Phase 2C: Ktor MCP Client & JSON-RPC Gateway
+Focus: Model Context Protocol (MCP) JSON-RPC 2.0 client supporting remote tool discovery and execution.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (4 files total):
+1. app/src/main/java/com/edgehybrid/agent/mcp/McpProtocol.kt
+   - Data classes for JSON-RPC 2.0:
+     data class JsonRpcRequest(val jsonrpc: String = "2.0", val id: String, val method: String, val params: Map<String, Any?> = emptyMap())
+     data class JsonRpcResponse(val jsonrpc: String = "2.0", val id: String, val result: Map<String, Any?>? = null, val error: JsonRpcError? = null)
+     data class JsonRpcError(val code: Int, val message: String, val data: Any? = null)
+     data class McpToolDefinition(val name: String, val description: String, val inputSchema: Map<String, Any?> = emptyMap())
+     data class McpCallToolResult(val content: List<Map<String, String>> = emptyList(), val isError: Boolean = false)
+2. app/src/main/java/com/edgehybrid/agent/mcp/McpServerConfig.kt
+   - Data class McpServerConfig(val id: String, val name: String, val baseUrl: String, val bearerToken: String? = null, val headers: Map<String, String> = emptyMap())
+3. app/src/main/java/com/edgehybrid/agent/mcp/KtorMcpTransportFactory.kt
+   - Factory creating Ktor HttpClient configured with ContentNegotiation.
+   - Sends 'MCP-Protocol-Version: 2025-03-26' and retains 'Mcp-Session-Id' header on subsequent requests.
+   - Structured cancellation safe: does NOT catch CancellationException as an McpTransportException.
+4. app/src/main/java/com/edgehybrid/agent/mcp/McpGateway.kt
+   - Coordinates remote MCP servers, discovers available tools via 'tools/list', and dispatches 'tools/call'.
+""",
+    "2D": """### Phase 2D: Hilt DI, Tool Registry & Phase 2 Unit Tests
+Focus: Unify native tools, sandboxed JS skills, and MCP tools under Hilt dependency injection, and write comprehensive unit tests.
+Package Root: com.edgehybrid.agent
+
+EXACT REQUIRED FILES TO GENERATE (5 files total):
+1. app/src/main/java/com/edgehybrid/agent/di/PhaseTwoModule.kt
+   - Hilt @Module @InstallIn(SingletonComponent::class) providing:
+     * ScriptSandbox -> HeadlessWebViewSandbox (via @Binds or @Provides)
+     * NativeActionHandler
+     * McpGateway
+     * ToolRegistry
+2. app/src/main/java/com/edgehybrid/agent/tool/ToolRegistry.kt
+   - Catalog uniting NativeActionHandler tools, ScriptSandbox skills, and McpGateway tools.
+   - Method: suspend fun executeTool(name: String, argumentsJson: String): Result<String>
+3. app/src/main/java/com/edgehybrid/agent/ui/tools/ToolsViewModel.kt
+   - ViewModel using @HiltViewModel injecting ToolRegistry and NativeActionHandler.
+   - StateFlow exposing registered tools and active ActionConfirmation state.
+4. app/src/test/java/com/edgehybrid/agent/nativeactions/NativeActionHandlerTest.kt
+   - Unit tests for NativeActionHandler: timer creation intent extras, note creation flow, SMS confirmation generation.
+5. app/src/test/java/com/edgehybrid/agent/sandbox/HeadlessWebViewSandboxTest.kt
+   - Unit tests for HeadlessWebViewSandbox: parameter validation, bridge completion callback, timeout watchdog behavior.
+"""
+}
+
+
 class AutonomousPhaseBuilder:
     """Manages the generation, self-evaluation, and persistence of each engineering phase."""
 
@@ -242,25 +351,29 @@ class AutonomousPhaseBuilder:
         self.logger = logger
         self.max_attempts = max_attempts
 
-    def extract_phase_spec(self, phase_num: int) -> str:
+    def extract_phase_spec(self, phase_id: str) -> str:
+        phase_str = str(phase_id).strip()
+        if phase_str in SUBPHASE_SPECS:
+            return SUBPHASE_SPECS[phase_str]
         if not SPEC_FILE.exists():
-            return f"Phase {phase_num} specification missing."
+            return f"Phase {phase_str} specification missing."
         content = SPEC_FILE.read_text(encoding="utf-8")
-        marker = f"### Phase {phase_num}:"
-        next_marker = f"### Phase {phase_num + 1}:"
+        marker = f"### Phase {phase_str}:"
+        next_marker = f"### Phase "
         if marker in content:
             part = content.split(marker, 1)[1]
             if next_marker in part:
                 return part.split(next_marker, 1)[0].strip()
             return part.split("---", 1)[0].strip()
-        return f"Phase {phase_num} details from SPEC.md"
+        return f"Phase {phase_str} details from SPEC.md"
 
-    def generate_phase_files(self, phase_num: int, phase_spec: str, critique: str = "") -> Dict[str, str]:
-        """Prompts the LLM to generate all production Kotlin files for the phase."""
+    def generate_phase_files(self, phase_id: str, phase_spec: str, critique: str = "") -> Dict[str, str]:
+        """Prompts the LLM to generate production Kotlin files for the phase/sub-phase."""
         critique_block = f"PREVIOUS REVIEW CRITIQUE TO FIX:\n{critique}\n" if critique else ""
         prompt = f"""
-You are the Lead Android Systems Architect building Phase {phase_num} of the Edge Hybrid Agent.
+You are the Lead Android Systems Architect building {phase_id} of the Edge Hybrid Agent.
 TARGET ARCHITECTURE: Kotlin 2.0, Jetpack Compose, Ktor, Room, Hilt, Material 3, Android 14+ (API 34/35).
+PACKAGE ROOT: com.edgehybrid.agent
 
 PHASE SPECIFICATION:
 {phase_spec}
@@ -268,25 +381,25 @@ PHASE SPECIFICATION:
 {critique_block}
 
 RULES:
-1. Provide COMPLETE, drop-in, non-stubbed Kotlin / configuration code.
+1. Provide COMPLETE, drop-in, non-stubbed Kotlin / JavaScript / configuration code.
 2. NO placeholder comments like '// TODO: Implement later' or dummy returns.
-3. Every file must include complete package declaration and all required imports.
+3. Every file must include complete package declaration ('package com.edgehybrid.agent...') and all required imports.
 4. Output each file using this EXACT clean delimiter format:
 
 === FILE: path/to/FileName.kt ===
 <full file contents here>
 === END_FILE ===
 
-Repeat for all files needed to fully satisfy Phase {phase_num}.
+Generate ONLY the exact files listed in the phase specification. Keep each file concise, complete, and correct.
 """
         system = "You are an autonomous senior Android engineer. Output production code using the specified === FILE: ... === delimiters."
-        self.logger.info(f"[Phase {phase_num}] Requesting synthesis from LLM cascade...")
+        self.logger.info(f"[{phase_id}] Requesting synthesis from LLM cascade...")
         resp, provider = self.llm.complete(prompt, system=system, json_mode=False)
         if not resp:
-            self.logger.error(f"[Phase {phase_num}] Failed to get response from any LLM provider.")
+            self.logger.error(f"[{phase_id}] Failed to get response from any LLM provider.")
             return {}
 
-        self.logger.info(f"[Phase {phase_num}] Synthesis received from provider: {provider}")
+        self.logger.info(f"[{phase_id}] Synthesis received from provider: {provider}")
         files_map = {}
 
         # 1. Delimiter pattern
@@ -351,12 +464,12 @@ Repeat for all files needed to fully satisfy Phase {phase_num}.
                 flaws.append(f"{path}: file content is suspiciously short ({len(code)} bytes)")
         return len(flaws) == 0, flaws
 
-    def llm_self_review(self, phase_num: int, phase_spec: str, files_map: Dict[str, str]) -> Tuple[bool, int, List[str]]:
+    def llm_self_review(self, phase_id: str, phase_spec: str, files_map: Dict[str, str]) -> Tuple[bool, int, List[str]]:
         """Sends the generated files to the LLM reviewer for independent verification."""
         code_summary = "\n\n".join([f"FILE: {p}\n```kotlin\n{c}\n```" for p, c in files_map.items()])
         prompt = f"""
 You are an uncompromising Principal Code Reviewer and QA Architect.
-Verify whether the following generated code completely satisfies Phase {phase_num} requirements.
+Verify whether the following generated code completely satisfies {phase_id} requirements.
 
 REQUIREMENTS:
 {phase_spec}
@@ -365,10 +478,10 @@ GENERATED CODE:
 {code_summary}
 
 EVALUATION CRITERIA:
-1. Are all required classes, functions, and interfaces fully implemented without stubs?
+1. Are all required files for {phase_id} present and fully implemented without stubs?
 2. Are coroutines used properly (Dispatchers.IO for background I/O, no UI blocking)?
-3. Are error cases and exceptions gracefully handled?
-4. Are there any false positives or mocked behaviors pretending to be real?
+3. Are error cases, nullability, and exceptions gracefully handled?
+4. Are all imports valid and compile-ready (e.g. android.webkit.CookieManager, never android.view.CookieManager)?
 
 Respond in JSON only:
 {{
@@ -403,10 +516,10 @@ Respond in JSON only:
         except Exception as e:
             return False, 50, [f"Review parsing error: {e}"]
 
-    def record_lesson(self, phase_num: int, rule: str, outcome: str):
+    def record_lesson(self, phase_id: str, rule: str, outcome: str):
         entry = {
             "timestamp": time.time(),
-            "phase": phase_num,
+            "phase": str(phase_id),
             "outcome": outcome,
             "rule": rule
         }
@@ -420,95 +533,77 @@ Respond in JSON only:
             full_path.write_text(code, encoding="utf-8")
             self.logger.info(f"Wrote file: {rel_path} ({len(code)} chars)")
 
-    def commit_and_push(self, phase_num: int, title: str):
+    def commit_and_push(self, phase_id: str, title: str):
         try:
             subprocess.run(["git", "add", "."], cwd=BASE_DIR, check=True)
-            msg = f"feat(phase-{phase_num}): implement {title} with automated self-evaluation"
+            msg = f"feat(phase-{str(phase_id).lower()}): implement {title} with automated self-evaluation"
             subprocess.run(["git", "commit", "-m", msg], cwd=BASE_DIR, check=True)
             subprocess.run(["git", "push", "origin", "main"], cwd=BASE_DIR, check=True)
-            self.logger.info(f"[Phase {phase_num}] Pushed to GitHub origin/main successfully!")
+            self.logger.info(f"[{phase_id}] Pushed to GitHub origin/main successfully!")
         except Exception as e:
             self.logger.warning(f"Git commit/push warning: {e}")
 
-    def is_phase_completed(self, phase_num: int) -> bool:
+    def is_phase_completed(self, phase_id: str) -> bool:
         if not LESSONS_FILE.exists():
             return False
         with open(LESSONS_FILE, "r", encoding="utf-8") as f:
             for line in f:
                 try:
                     data = json.loads(line)
-                    if data.get("phase") == phase_num and data.get("outcome") == "success":
+                    if str(data.get("phase")) == str(phase_id) and data.get("outcome") == "success":
                         return True
                 except Exception:
                     pass
         return False
 
-    def execute_phase(self, phase_num: int, phase_title: str) -> bool:
-        if self.is_phase_completed(phase_num):
-            self.logger.info(f"[Phase {phase_num}] Already verified and committed. Skipping.")
+    def execute_phase(self, phase_id: str, phase_title: str) -> bool:
+        if self.is_phase_completed(phase_id):
+            self.logger.info(f"[{phase_id}] Already verified and committed. Skipping.")
             return True
-        self.logger.info(f"\n{'='*70}\nSTARTING EXECUTION: Phase {phase_num} - {phase_title}\n{'='*70}")
-        phase_spec = self.extract_phase_spec(phase_num)
+        self.logger.info(f"\n{'='*70}\nSTARTING EXECUTION: {phase_id} - {phase_title}\n{'='*70}")
+        phase_spec = self.extract_phase_spec(phase_id)
         critique = ""
-        if phase_num == 2:
-            critique = """Known critical compilation & architecture requirements from architectural audit to address on Attempt 1:
-1. STRICT IMPORTS:
-   - In HeadlessWebViewSandbox.kt: MUST import 'android.webkit.CookieManager' (NEVER 'android.view.CookieManager').
-   - In test files: MUST import 'androidx.activity.result.ActivityResult' (NEVER 'android.app.ActivityResult').
-2. DEPENDENCIES in app/build.gradle.kts:
-   - MUST declare: implementation("androidx.webkit:webkit:1.11.0")
-   - MUST declare: implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
-3. HILT INJECTION:
-   - In NativeActionHandler: inject '@ApplicationContext private val context: Context'.
-4. SANDBOX JAVASCRIPT CONTRACT:
-   - HeadlessWebViewSandbox must define window.__edgeRun or invoke the script with the exact bootstrap global variables (input, networkOrigins) that calculator.js, device_info.js, and web_extract.js expect.
-   - The completion callback bridge (edgeHost.complete / edgeHost.fail) must be properly wired to resume the Kotlin coroutine.
-5. CONSTRUCTORS & DATA FLOW:
-   - In AgentViewModel, ensure Context passed to NativeActionHandler.createCalendarEvent is non-null.
-   - In SkillNetworkPolicy, initialize all val properties in the primary constructor (rules: List<String> = emptyList(), directWebViewNetworkEnabled: Boolean = false).
-   - In NativeActionHandler prepareSms, explicitly call retainPendingMessage so confirmSms has the active pending action.
-   - In SkillHostBridge startExecution, assign the skill property on ActiveExecution (active.skill must not be null).
-   - In WebMarkdownExtractor, render direct text children properly so content inside tags is never dropped.
-   - For MCP, send negotiated MCP-Protocol-Version header on subsequent requests.
-   - In PizzaTimerInstrumentedTest, invoke through AgentCommandParser end-to-end to verify 'Set a timer for 15 minutes for pizza'.
-"""
+        if str(phase_id) == "2B":
+            critique = "Ensure HeadlessWebViewSandbox imports 'android.webkit.CookieManager' (not android.view.CookieManager). Ensure withTimeoutOrNull(5000) watchdog."
+        elif str(phase_id) == "2C":
+            critique = "Ensure McpProtocol sends 'MCP-Protocol-Version: 2025-03-26' and preserves coroutine CancellationException."
 
         for attempt in range(1, self.max_attempts + 1):
-            self.logger.info(f"[Phase {phase_num}] Attempt {attempt}/{self.max_attempts}...")
-            files_map = self.generate_phase_files(phase_num, phase_spec, critique)
+            self.logger.info(f"[{phase_id}] Attempt {attempt}/{self.max_attempts}...")
+            files_map = self.generate_phase_files(phase_id, phase_spec, critique)
             if not files_map:
-                self.logger.warning(f"[Phase {phase_num}] No files produced on attempt {attempt}. Retrying...")
+                self.logger.warning(f"[{phase_id}] No files produced on attempt {attempt}. Retrying...")
                 continue
 
             # Static check
             static_ok, static_flaws = self.static_inspection(files_map)
             if not static_ok:
-                self.logger.warning(f"[Phase {phase_num}] Static check failed: {static_flaws}")
+                self.logger.warning(f"[{phase_id}] Static check failed: {static_flaws}")
                 critique = "Static check failures:\n" + "\n".join(static_flaws)
                 continue
 
             # LLM Review & False-positive gate
-            passes, score, flaws = self.llm_self_review(phase_num, phase_spec, files_map)
-            self.logger.info(f"[Phase {phase_num}] Self-Review Score: {score}/100. Passes: {passes}")
+            passes, score, flaws = self.llm_self_review(phase_id, phase_spec, files_map)
+            self.logger.info(f"[{phase_id}] Self-Review Score: {score}/100. Passes: {passes}")
 
             if passes and score >= 80:
-                self.logger.info(f"[Phase {phase_num}] ACCEPTED by Self-Evaluation! Writing code to disk...")
+                self.logger.info(f"[{phase_id}] ACCEPTED by Self-Evaluation! Writing code to disk...")
                 self.write_files(files_map)
-                self.record_lesson(phase_num, f"Phase {phase_num} succeeded with score {score}.", "success")
-                self.commit_and_push(phase_num, phase_title)
+                self.record_lesson(phase_id, f"Phase {phase_id} succeeded with score {score}.", "success")
+                self.commit_and_push(phase_id, phase_title)
                 return True
             else:
-                self.logger.warning(f"[Phase {phase_num}] Self-Review rejected output (Score {score}). Flaws: {flaws}")
+                self.logger.warning(f"[{phase_id}] Self-Review rejected output (Score {score}). Flaws: {flaws}")
                 critique = f"Self-review score was {score}/100. Flaws to fix:\n" + "\n".join(flaws)
-                self.record_lesson(phase_num, f"Phase {phase_num} rejected: {flaws[:2]}", "rejected")
+                self.record_lesson(phase_id, f"Phase {phase_id} rejected: {flaws[:2]}", "rejected")
 
-        self.logger.error(f"[Phase {phase_num}] Exhausted attempts without reaching passing score.")
+        self.logger.error(f"[{phase_id}] Exhausted attempts without reaching passing score.")
         return False
 
 
 def main():
     parser = argparse.ArgumentParser(description="Autonomous Phase Builder for Edge Hybrid Agent")
-    parser.add_argument("--phase", type=int, choices=[1, 2, 3, 4, 5], help="Execute a single specific phase")
+    parser.add_argument("--phase", type=str, help="Specific phase or sub-phase to run (1, 2A, 2B, 2C, 2D, 2, 3, 4, 5)")
     parser.add_argument("--all", action="store_true", help="Execute all phases (1 through 5) sequentially")
     parser.add_argument("--prefer-space-bunny", action="store_true", help="Prioritize Space Bunny Alpha on OpenRouter over Gemini")
     parser.add_argument("--max-attempts", type=int, default=int(os.environ.get("MAX_ATTEMPTS", 20)), help="Maximum attempts per phase")
@@ -519,27 +614,50 @@ def main():
     llm = CascadingLLMClient(keys, logger, prefer_space_bunny=args.prefer_space_bunny)
     builder = AutonomousPhaseBuilder(llm, logger, max_attempts=args.max_attempts)
 
-    phases = [
-        (1, "Production Cloud Engine & Recursive Agentic Loop"),
-        (2, "Native Tool Execution & Headless Sandbox"),
-        (3, "TypeSafe JEV Guardrails & Continuous Learning"),
-        (4, "Samsung Galaxy S23 Ultra S Pen & Vision"),
-        (5, "Offline LiteRT & On-Device RAG")
+    phase_2_subphases = [
+        ("2A", "Room DB & Native Action Handlers"),
+        ("2B", "Headless WebView Sandbox & JS Bridge"),
+        ("2C", "Ktor MCP Client & JSON-RPC Gateway"),
+        ("2D", "Hilt DI, Tool Registry & Phase 2 Unit Tests")
+    ]
+
+    all_phases = [
+        ("1", "Production Cloud Engine & Recursive Agentic Loop"),
+        ("2A", "Room DB & Native Action Handlers"),
+        ("2B", "Headless WebView Sandbox & JS Bridge"),
+        ("2C", "Ktor MCP Client & JSON-RPC Gateway"),
+        ("2D", "Hilt DI, Tool Registry & Phase 2 Unit Tests"),
+        ("3", "TypeSafe JEV Guardrails & Continuous Learning"),
+        ("4", "Samsung Galaxy S23 Ultra S Pen & Vision"),
+        ("5", "Offline LiteRT & On-Device RAG")
     ]
 
     if args.phase:
-        p_num = args.phase
-        title = next(t for n, t in phases if n == p_num)
-        success = builder.execute_phase(p_num, title)
-        sys.exit(0 if success else 1)
+        p_arg = str(args.phase).strip().upper()
+        if p_arg == "2":
+            logger.info("Executing Phase 2 via modular sub-phases: 2A -> 2B -> 2C -> 2D")
+            for sub_id, sub_title in phase_2_subphases:
+                success = builder.execute_phase(sub_id, sub_title)
+                if not success:
+                    logger.error(f"Stopping execution: Sub-phase {sub_id} failed.")
+                    sys.exit(1)
+                time.sleep(2)
+            sys.exit(0)
+        else:
+            match = next((t for n, t in all_phases if n.upper() == p_arg), None)
+            if not match:
+                logger.error(f"Unknown phase identifier: {p_arg}. Available: {[p[0] for p in all_phases]}")
+                sys.exit(1)
+            success = builder.execute_phase(p_arg, match)
+            sys.exit(0 if success else 1)
     elif args.all:
-        for p_num, title in phases:
-            success = builder.execute_phase(p_num, title)
+        for p_id, title in all_phases:
+            success = builder.execute_phase(p_id, title)
             if not success:
-                logger.error(f"Stopping execution: Phase {p_num} failed.")
+                logger.error(f"Stopping execution: Phase {p_id} failed.")
                 sys.exit(1)
             time.sleep(3)
-        logger.info("ALL PHASES COMPLETED AND VERIFIED SUCCESSFULLY!")
+        logger.info("ALL PHASES AND SUB-PHASES COMPLETED AND VERIFIED SUCCESSFULLY!")
     else:
         parser.print_help()
 

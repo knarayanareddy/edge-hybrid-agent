@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       phase:
-        description: "Specific phase to run (1-5) or 'all'"
+        description: "Specific phase (1, 2A, 2B, 2C, 2D, 2, 3, 4, 5) or 'all'"
         required: false
         default: "all"
   schedule:
