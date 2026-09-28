@@ -15,6 +15,7 @@ jobs:
   build:
     name: Execute Autonomous Adversarial Builder
     runs-on: ubuntu-latest
+    timeout-minutes: 350
     permissions:
       contents: write
       pull-requests: write
@@ -50,13 +51,14 @@ jobs:
           OPENROUTER_API_KEY_4: ${{ secrets.OPENROUTER_API_KEY_4 }}
           OPENROUTER_API_KEY_5: ${{ secrets.OPENROUTER_API_KEY_5 }}
           OPENROUTER_API_KEY_6: ${{ secrets.OPENROUTER_API_KEY_6 }}
+          MAX_ATTEMPTS: "20"
         run: |
           PHASE_ARG="--all"
           if [ "${{ github.event.inputs.phase }}" != "all" ] && [ -n "${{ github.event.inputs.phase }}" ]; then
             PHASE_ARG="--phase ${{ github.event.inputs.phase }}"
           fi
-          echo "Starting Cloud Builder with Space Bunny Alpha ($PHASE_ARG)..."
-          python3 tools/autonomous_builder.py $PHASE_ARG --prefer-space-bunny
+          echo "Starting Cloud Builder with Space Bunny Alpha ($PHASE_ARG, max attempts: 20)..."
+          python3 tools/autonomous_builder.py $PHASE_ARG --prefer-space-bunny --max-attempts 20
 
       - name: Notify Telegram on Result
         if: always()

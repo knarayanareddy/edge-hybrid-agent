@@ -237,9 +237,10 @@ class CascadingLLMClient:
 class AutonomousPhaseBuilder:
     """Manages the generation, self-evaluation, and persistence of each engineering phase."""
 
-    def __init__(self, llm: CascadingLLMClient, logger: logging.Logger):
+    def __init__(self, llm: CascadingLLMClient, logger: logging.Logger, max_attempts: int = 20):
         self.llm = llm
         self.logger = logger
+        self.max_attempts = max_attempts
 
     def extract_phase_spec(self, phase_num: int) -> str:
         if not SPEC_FILE.exists():
@@ -472,8 +473,8 @@ Respond in JSON only:
    - In PizzaTimerInstrumentedTest, invoke through AgentCommandParser end-to-end to verify 'Set a timer for 15 minutes for pizza'.
 """
 
-        for attempt in range(1, 9):
-            self.logger.info(f"[Phase {phase_num}] Attempt {attempt}/8...")
+        for attempt in range(1, self.max_attempts + 1):
+            self.logger.info(f"[Phase {phase_num}] Attempt {attempt}/{self.max_attempts}...")
             files_map = self.generate_phase_files(phase_num, phase_spec, critique)
             if not files_map:
                 self.logger.warning(f"[Phase {phase_num}] No files produced on attempt {attempt}. Retrying...")
@@ -510,12 +511,13 @@ def main():
     parser.add_argument("--phase", type=int, choices=[1, 2, 3, 4, 5], help="Execute a single specific phase")
     parser.add_argument("--all", action="store_true", help="Execute all phases (1 through 5) sequentially")
     parser.add_argument("--prefer-space-bunny", action="store_true", help="Prioritize Space Bunny Alpha on OpenRouter over Gemini")
+    parser.add_argument("--max-attempts", type=int, default=int(os.environ.get("MAX_ATTEMPTS", 20)), help="Maximum attempts per phase")
     args = parser.parse_args()
 
     logger = setup_logger()
     keys = load_keys()
     llm = CascadingLLMClient(keys, logger, prefer_space_bunny=args.prefer_space_bunny)
-    builder = AutonomousPhaseBuilder(llm, logger)
+    builder = AutonomousPhaseBuilder(llm, logger, max_attempts=args.max_attempts)
 
     phases = [
         (1, "Production Cloud Engine & Recursive Agentic Loop"),
