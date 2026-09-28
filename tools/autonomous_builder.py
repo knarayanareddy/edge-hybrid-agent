@@ -450,21 +450,30 @@ Respond in JSON only:
         phase_spec = self.extract_phase_spec(phase_num)
         critique = ""
         if phase_num == 2:
-            critique = """Known critical requirements from architectural audit to address on Attempt 1:
-1. Declare 'androidx.webkit:webkit:1.11.0' dependency in app/build.gradle.kts.
-2. In AgentViewModel, ensure Context passed to NativeActionHandler.createCalendarEvent is non-null.
-3. In SkillNetworkPolicy, initialize all val properties properly in the primary constructor (rules: List<String> = emptyList(), directWebViewNetworkEnabled: Boolean = false).
-4. In NativeActionHandler prepareSms, explicitly call retainPendingMessage so confirmSms has the active pending action.
-5. In SkillHostBridge startExecution, assign the skill property on ActiveExecution (active.skill must not be null).
-6. In WebMarkdownExtractor, render direct text children properly so content inside tags is never dropped.
-7. Ensure 5000ms hard watchdog bounds both WebView and background host operations.
-8. For MCP, send negotiated MCP-Protocol-Version header on subsequent requests.
-9. In PizzaTimerInstrumentedTest, invoke through AgentCommandParser end-to-end to verify 'Set a timer for 15 minutes for pizza'.
-10. In BundledSkillsTest, execute starter skills (calculator, device_info, web_extract) to verify host bridge calls succeed.
+            critique = """Known critical compilation & architecture requirements from architectural audit to address on Attempt 1:
+1. STRICT IMPORTS:
+   - In HeadlessWebViewSandbox.kt: MUST import 'android.webkit.CookieManager' (NEVER 'android.view.CookieManager').
+   - In test files: MUST import 'androidx.activity.result.ActivityResult' (NEVER 'android.app.ActivityResult').
+2. DEPENDENCIES in app/build.gradle.kts:
+   - MUST declare: implementation("androidx.webkit:webkit:1.11.0")
+   - MUST declare: implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+3. HILT INJECTION:
+   - In NativeActionHandler: inject '@ApplicationContext private val context: Context'.
+4. SANDBOX JAVASCRIPT CONTRACT:
+   - HeadlessWebViewSandbox must define window.__edgeRun or invoke the script with the exact bootstrap global variables (input, networkOrigins) that calculator.js, device_info.js, and web_extract.js expect.
+   - The completion callback bridge (edgeHost.complete / edgeHost.fail) must be properly wired to resume the Kotlin coroutine.
+5. CONSTRUCTORS & DATA FLOW:
+   - In AgentViewModel, ensure Context passed to NativeActionHandler.createCalendarEvent is non-null.
+   - In SkillNetworkPolicy, initialize all val properties in the primary constructor (rules: List<String> = emptyList(), directWebViewNetworkEnabled: Boolean = false).
+   - In NativeActionHandler prepareSms, explicitly call retainPendingMessage so confirmSms has the active pending action.
+   - In SkillHostBridge startExecution, assign the skill property on ActiveExecution (active.skill must not be null).
+   - In WebMarkdownExtractor, render direct text children properly so content inside tags is never dropped.
+   - For MCP, send negotiated MCP-Protocol-Version header on subsequent requests.
+   - In PizzaTimerInstrumentedTest, invoke through AgentCommandParser end-to-end to verify 'Set a timer for 15 minutes for pizza'.
 """
 
-        for attempt in range(1, 6):
-            self.logger.info(f"[Phase {phase_num}] Attempt {attempt}/5...")
+        for attempt in range(1, 9):
+            self.logger.info(f"[Phase {phase_num}] Attempt {attempt}/8...")
             files_map = self.generate_phase_files(phase_num, phase_spec, critique)
             if not files_map:
                 self.logger.warning(f"[Phase {phase_num}] No files produced on attempt {attempt}. Retrying...")
