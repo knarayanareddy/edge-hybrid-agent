@@ -76,7 +76,17 @@ class CascadingLLMClient:
         self.logger = logger
         self.prefer_space_bunny = prefer_space_bunny
         self.gemini_key = keys.get("GEMINI_API_KEY")
-        self.openrouter_key = keys.get("OPENROUTER_API_KEY")
+        self.tinker_key = keys.get("TINKER_API_KEY")
+        # Collect all pooled OpenRouter keys
+        self.openrouter_keys: List[str] = []
+        for k, v in keys.items():
+            if k.startswith("OPENROUTER_API_KEY") and v.strip():
+                clean_v = v.strip().strip('"').strip("'")
+                if clean_v not in self.openrouter_keys:
+                    self.openrouter_keys.append(clean_v)
+        self.current_key_idx = 0
+        self.logger.info(f"Initialized OpenRouter KeyPool with {len(self.openrouter_keys)} active account keys.")
+
         self.gemini_models = [
             "gemini-3.8-flash",
             "gemini-3.5-flash-lite",
@@ -84,18 +94,16 @@ class CascadingLLMClient:
             "gemini-flash-latest"
         ]
 
-    def _call_openrouter(self, prompt: str, system: str, json_mode: bool) -> Tuple[Optional[str], str]:
-        if not self.openrouter_key:
+    def _call_openrouter(self, prompt: str, system: str, json_mode: bool, max_retries: int = 6) -> Tuple[Optional[str], str]:
+        if not self.openrouter_keys:
             return None, "none"
-        or_models = [
-            "stealth/space-bunny-alpha",
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "google/gemini-2.0-flash-exp:free"
-        ]
-        for om in or_models:
+        model = "stealth/space-bunny-alpha"
+        for attempt in range(1, max_retries + 1):
+            key = self.openrouter_keys[self.current_key_idx % len(self.openrouter_keys)]
+            key_tag = f"key-{self.current_key_idx + 1}/{len(self.openrouter_keys)}"
             try:
                 payload = {
-                    "model": om,
+                    "model": model,
                     "messages": [
                         {"role": "system", "content": system or "You are an expert autonomous software engineer."},
                         {"role": "user", "content": prompt}
@@ -106,20 +114,58 @@ class CascadingLLMClient:
                     "https://openrouter.ai/api/v1/chat/completions",
                     data=json.dumps(payload).encode("utf-8"),
                     headers={
-                        "Authorization": f"Bearer {self.openrouter_key}",
+                        "Authorization": f"Bearer {key}",
                         "Content-Type": "application/json",
                         "HTTP-Referer": "https://github.com/knarayanareddy/edge-hybrid-agent",
                         "X-Title": "Edge Hybrid Agent Builder"
                     },
                     method="POST"
                 )
-                with urllib.request.urlopen(req, timeout=60) as resp:
+                with urllib.request.urlopen(req, timeout=360) as resp:
                     res = json.loads(resp.read().decode("utf-8"))
                     content = res.get("choices", [{}])[0].get("message", {}).get("content", "")
                     if content.strip():
-                        return content.strip(), f"openrouter/{om}"
+                        return content.strip(), f"openrouter/{model} [{key_tag}]"
+            except urllib.error.HTTPError as e:
+                self.logger.warning(f"Space Bunny Alpha on {key_tag} hit HTTP {e.code}: {e.reason}")
+                # Rotate key immediately to the next account
+                self.current_key_idx = (self.current_key_idx + 1) % len(self.openrouter_keys)
+                self.logger.info(f"Rotated to next account key in pool: key-{self.current_key_idx + 1}...")
+                time.sleep(1)
             except Exception as e:
-                self.logger.debug(f"OpenRouter fallback {om} failed: {e}")
+                self.logger.warning(f"Space Bunny Alpha error on {key_tag}: {e}")
+                self.current_key_idx = (self.current_key_idx + 1) % len(self.openrouter_keys)
+                time.sleep(2)
+        return None, "none"
+
+    def _call_tinker(self, prompt: str, system: str, json_mode: bool) -> Tuple[Optional[str], str]:
+        if not self.tinker_key:
+            return None, "none"
+        try:
+            payload = {
+                "model": "zai-org/GLM-5.3:peft:262144",
+                "messages": [
+                    {"role": "system", "content": system or "You are an expert autonomous software engineer."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.2 if json_mode else 0.4
+            }
+            req = urllib.request.Request(
+                "https://tinker.thinkingmachines.dev/services/tinker-prod/oai/api/v1/chat/completions",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {self.tinker_key}",
+                    "Content-Type": "application/json"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                res = json.loads(resp.read().decode("utf-8"))
+                content = res.get("choices", [{}])[0].get("message", {}).get("content", "")
+                if content.strip():
+                    return content.strip(), "tinker/zai-org/GLM-5.3:peft:262144"
+        except Exception as e:
+            self.logger.warning(f"Tinker GLM-5.3 fallback failed: {e}")
         return None, "none"
 
     def _call_gemini(self, prompt: str, system: str, json_mode: bool, max_retries: int) -> Tuple[Optional[str], str]:
@@ -173,17 +219,19 @@ class CascadingLLMClient:
                     break
         return None, "none"
 
-    def complete(self, prompt: str, system: str = "", json_mode: bool = False, max_retries: int = 4) -> Tuple[Optional[str], str]:
-        if self.prefer_space_bunny:
-            resp, prov = self._call_openrouter(prompt, system, json_mode)
-            if resp:
-                return resp, prov
-            return self._call_gemini(prompt, system, json_mode, max_retries)
-        else:
-            resp, prov = self._call_gemini(prompt, system, json_mode, max_retries)
-            if resp:
-                return resp, prov
-            return self._call_openrouter(prompt, system, json_mode)
+    def complete(self, prompt: str, system: str = "", json_mode: bool = False, max_retries: int = 5) -> Tuple[Optional[str], str]:
+        # 1. Dedicated Primary Engine: Space Bunny Alpha with 5 retries & backoff
+        resp, prov = self._call_openrouter(prompt, system, json_mode, max_retries=max_retries)
+        if resp:
+            return resp, prov
+
+        # 2. Radical Emergency Fallback ONLY (triggered only if all 5 retries fail)
+        self.logger.critical("RADICAL CONTINGENCY: Space Bunny Alpha failed 5 consecutive attempts. Activating emergency backup...")
+        resp, prov = self._call_tinker(prompt, system, json_mode)
+        if resp:
+            return resp, prov
+
+        return self._call_gemini(prompt, system, json_mode, max_retries=2)
 
 
 class AutonomousPhaseBuilder:
@@ -330,7 +378,14 @@ Respond in JSON only:
 }}
 """
         system = "You are an expert QA auditor. Evaluate the code objectively and output valid JSON only."
-        resp, provider = self.llm.complete(prompt, system=system, json_mode=True)
+        resp, provider = None, "none"
+        for rev_try in range(2):
+            resp, provider = self.llm.complete(prompt, system=system, json_mode=True)
+            if resp:
+                break
+            self.logger.warning(f"Review call attempt {rev_try+1} returned empty; retrying in 5s...")
+            time.sleep(5)
+
         if not resp:
             return False, 50, ["LLM reviewer was unreachable"]
 
@@ -374,13 +429,42 @@ Respond in JSON only:
         except Exception as e:
             self.logger.warning(f"Git commit/push warning: {e}")
 
+    def is_phase_completed(self, phase_num: int) -> bool:
+        if not LESSONS_FILE.exists():
+            return False
+        with open(LESSONS_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    data = json.loads(line)
+                    if data.get("phase") == phase_num and data.get("outcome") == "success":
+                        return True
+                except Exception:
+                    pass
+        return False
+
     def execute_phase(self, phase_num: int, phase_title: str) -> bool:
+        if self.is_phase_completed(phase_num):
+            self.logger.info(f"[Phase {phase_num}] Already verified and committed. Skipping.")
+            return True
         self.logger.info(f"\n{'='*70}\nSTARTING EXECUTION: Phase {phase_num} - {phase_title}\n{'='*70}")
         phase_spec = self.extract_phase_spec(phase_num)
         critique = ""
+        if phase_num == 2:
+            critique = """Known critical requirements from architectural audit to address on Attempt 1:
+1. Declare 'androidx.webkit:webkit:1.11.0' dependency in app/build.gradle.kts.
+2. In AgentViewModel, ensure Context passed to NativeActionHandler.createCalendarEvent is non-null.
+3. In SkillNetworkPolicy, initialize all val properties properly in the primary constructor (rules: List<String> = emptyList(), directWebViewNetworkEnabled: Boolean = false).
+4. In NativeActionHandler prepareSms, explicitly call retainPendingMessage so confirmSms has the active pending action.
+5. In SkillHostBridge startExecution, assign the skill property on ActiveExecution (active.skill must not be null).
+6. In WebMarkdownExtractor, render direct text children properly so content inside tags is never dropped.
+7. Ensure 5000ms hard watchdog bounds both WebView and background host operations.
+8. For MCP, send negotiated MCP-Protocol-Version header on subsequent requests.
+9. In PizzaTimerInstrumentedTest, invoke through AgentCommandParser end-to-end to verify 'Set a timer for 15 minutes for pizza'.
+10. In BundledSkillsTest, execute starter skills (calculator, device_info, web_extract) to verify host bridge calls succeed.
+"""
 
-        for attempt in range(1, 4):
-            self.logger.info(f"[Phase {phase_num}] Attempt {attempt}/3...")
+        for attempt in range(1, 6):
+            self.logger.info(f"[Phase {phase_num}] Attempt {attempt}/5...")
             files_map = self.generate_phase_files(phase_num, phase_spec, critique)
             if not files_map:
                 self.logger.warning(f"[Phase {phase_num}] No files produced on attempt {attempt}. Retrying...")

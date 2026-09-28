@@ -1,0 +1,74 @@
+name: Cloud Autonomous Edge Hybrid Agent Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: "Specific phase to run (1-5) or 'all'"
+        required: false
+        default: "all"
+  schedule:
+    # Runs periodically every 6 hours or can be manually triggered
+    - cron: '0 */6 * * *'
+
+jobs:
+  build:
+    name: Execute Autonomous Adversarial Builder
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Authenticate GitHub CLI & Git
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          echo "$GH_PAT" | gh auth login --with-token
+          gh auth setup-git
+          git config --global url."https://x-access-token:${GH_PAT}@github.com/".insteadOf "https://github.com/"
+          git config --global user.name "Autonomous Cloud Builder"
+          git config --global user.email "cloud-builder@local.dev"
+          gh auth status
+
+      - name: Run Space Bunny Alpha Autonomous Builder
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY_1 }}
+          OPENROUTER_API_KEY_1: ${{ secrets.OPENROUTER_API_KEY_1 }}
+          OPENROUTER_API_KEY_2: ${{ secrets.OPENROUTER_API_KEY_2 }}
+          OPENROUTER_API_KEY_3: ${{ secrets.OPENROUTER_API_KEY_3 }}
+          OPENROUTER_API_KEY_4: ${{ secrets.OPENROUTER_API_KEY_4 }}
+          OPENROUTER_API_KEY_5: ${{ secrets.OPENROUTER_API_KEY_5 }}
+          OPENROUTER_API_KEY_6: ${{ secrets.OPENROUTER_API_KEY_6 }}
+        run: |
+          PHASE_ARG="--all"
+          if [ "${{ github.event.inputs.phase }}" != "all" ] && [ -n "${{ github.event.inputs.phase }}" ]; then
+            PHASE_ARG="--phase ${{ github.event.inputs.phase }}"
+          fi
+          echo "Starting Cloud Builder with Space Bunny Alpha ($PHASE_ARG)..."
+          python3 tools/autonomous_builder.py $PHASE_ARG --prefer-space-bunny
+
+      - name: Notify Telegram on Result
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            MSG="🤖 *Edge Hybrid Agent Cloud Builder*\n\nStatus: \`$JOB_STATUS\`\nBranch: \`main\`\nRepository: \`knarayanareddy/edge-hybrid-agent\`"
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d "chat_id=${TELEGRAM_CHAT_ID}" \
+              -d "text=${MSG}" \
+              -d "parse_mode=Markdown" || true
+          fi
