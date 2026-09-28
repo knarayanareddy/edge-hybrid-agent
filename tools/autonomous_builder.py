@@ -71,9 +71,10 @@ def load_keys() -> Dict[str, str]:
 class CascadingLLMClient:
     """Robust cascading client across Gemini free models and fallbacks."""
 
-    def __init__(self, keys: Dict[str, str], logger: logging.Logger):
+    def __init__(self, keys: Dict[str, str], logger: logging.Logger, prefer_space_bunny: bool = False):
         self.keys = keys
         self.logger = logger
+        self.prefer_space_bunny = prefer_space_bunny
         self.gemini_key = keys.get("GEMINI_API_KEY")
         self.openrouter_key = keys.get("OPENROUTER_API_KEY")
         self.gemini_models = [
@@ -83,84 +84,106 @@ class CascadingLLMClient:
             "gemini-flash-latest"
         ]
 
-    def complete(self, prompt: str, system: str = "", json_mode: bool = False, max_retries: int = 4) -> Tuple[Optional[str], str]:
-        # 1. Try Gemini Cascade
-        if self.gemini_key:
-            for model in self.gemini_models:
-                for attempt in range(max_retries):
-                    try:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-                        headers = {
-                            "x-goog-api-key": self.gemini_key,
-                            "Content-Type": "application/json"
-                        }
-                        parts = []
-                        if system:
-                            parts.append({"text": f"SYSTEM INSTRUCTION:\n{system}\n\n"})
-                        parts.append({"text": prompt})
-                        payload: Dict[str, Any] = {
-                            "contents": [{"parts": parts}],
-                            "generationConfig": {
-                                "temperature": 0.2 if json_mode else 0.4,
-                                "maxOutputTokens": 8192,
-                            }
-                        }
-                        if json_mode:
-                            payload["generationConfig"]["responseMimeType"] = "application/json"
-
-                        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-                        with urllib.request.urlopen(req, timeout=45) as resp:
-                            data = json.loads(resp.read().decode("utf-8"))
-                            candidates = data.get("candidates", [])
-                            if candidates:
-                                text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                                if text.strip():
-                                    return text.strip(), f"gemini/{model}"
-
-                    except urllib.error.HTTPError as e:
-                        if e.code == 429:
-                            backoff = (2 ** attempt) * 4
-                            self.logger.warning(f"Model {model} hit rate limit (429). Backing off {backoff}s...")
-                            time.sleep(backoff)
-                            continue
-                        elif e.code == 404:
-                            self.logger.debug(f"Model {model} not found (404); skipping to next.")
-                            break
-                        else:
-                            self.logger.warning(f"Model {model} HTTP {e.code}: {e.read().decode()[:120]}")
-                            break
-                    except Exception as e:
-                        self.logger.warning(f"Model {model} request failed: {e}")
-                        break
-
-        # 2. Try OpenRouter Fallback
-        if self.openrouter_key:
-            or_models = ["meta-llama/llama-3.3-70b-instruct:free", "google/gemini-2.0-flash-exp:free"]
-            for om in or_models:
-                try:
-                    payload = {
-                        "model": om,
-                        "messages": [
-                            {"role": "system", "content": system or "You are an expert autonomous software engineer."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        "temperature": 0.2 if json_mode else 0.4
-                    }
-                    req = urllib.request.Request(
-                        "https://openrouter.ai/api/v1/chat/completions",
-                        data=json.dumps(payload).encode("utf-8"),
-                        headers={"Authorization": f"Bearer {self.openrouter_key}", "Content-Type": "application/json"},
-                        method="POST"
-                    )
-                    with urllib.request.urlopen(req, timeout=45) as resp:
-                        res = json.loads(resp.read().decode("utf-8"))
-                        content = res.get("choices", [{}])[0].get("message", {}).get("content", "")
-                        if content.strip():
-                            return content.strip(), f"openrouter/{om}"
-                except Exception as e:
-                    self.logger.debug(f"OpenRouter fallback {om} failed: {e}")
-
+    def _call_openrouter(self, prompt: str, system: str, json_mode: bool) -> Tuple[Optional[str], str]:
+        if not self.openrouter_key:
+            return None, "none"
+        or_models = [
+            "stealth/space-bunny-alpha",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "google/gemini-2.0-flash-exp:free"
+        ]
+        for om in or_models:
+            try:
+                payload = {
+                    "model": om,
+                    "messages": [
+                        {"role": "system", "content": system or "You are an expert autonomous software engineer."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.2 if json_mode else 0.4
+                }
+                req = urllib.request.Request(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={
+                        "Authorization": f"Bearer {self.openrouter_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://github.com/knarayanareddy/edge-hybrid-agent",
+                        "X-Title": "Edge Hybrid Agent Builder"
+                    },
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    res = json.loads(resp.read().decode("utf-8"))
+                    content = res.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    if content.strip():
+                        return content.strip(), f"openrouter/{om}"
+            except Exception as e:
+                self.logger.debug(f"OpenRouter fallback {om} failed: {e}")
         return None, "none"
+
+    def _call_gemini(self, prompt: str, system: str, json_mode: bool, max_retries: int) -> Tuple[Optional[str], str]:
+        if not self.gemini_key:
+            return None, "none"
+        for model in self.gemini_models:
+            for attempt in range(max_retries):
+                try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                    headers = {
+                        "x-goog-api-key": self.gemini_key,
+                        "Content-Type": "application/json"
+                    }
+                    parts = []
+                    if system:
+                        parts.append({"text": f"SYSTEM INSTRUCTION:\n{system}\n\n"})
+                    parts.append({"text": prompt})
+                    payload: Dict[str, Any] = {
+                        "contents": [{"parts": parts}],
+                        "generationConfig": {
+                            "temperature": 0.2 if json_mode else 0.4,
+                            "maxOutputTokens": 8192,
+                        }
+                    }
+                    if json_mode:
+                        payload["generationConfig"]["responseMimeType"] = "application/json"
+
+                    req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+                    with urllib.request.urlopen(req, timeout=45) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                            if text.strip():
+                                return text.strip(), f"gemini/{model}"
+
+                except urllib.error.HTTPError as e:
+                    if e.code == 429:
+                        backoff = (2 ** attempt) * 4
+                        self.logger.warning(f"Model {model} hit rate limit (429). Backing off {backoff}s...")
+                        time.sleep(backoff)
+                        continue
+                    elif e.code == 404:
+                        self.logger.debug(f"Model {model} not found (404); skipping to next.")
+                        break
+                    else:
+                        self.logger.warning(f"Model {model} HTTP {e.code}: {e.read().decode()[:120]}")
+                        break
+                except Exception as e:
+                    self.logger.warning(f"Model {model} request failed: {e}")
+                    break
+        return None, "none"
+
+    def complete(self, prompt: str, system: str = "", json_mode: bool = False, max_retries: int = 4) -> Tuple[Optional[str], str]:
+        if self.prefer_space_bunny:
+            resp, prov = self._call_openrouter(prompt, system, json_mode)
+            if resp:
+                return resp, prov
+            return self._call_gemini(prompt, system, json_mode, max_retries)
+        else:
+            resp, prov = self._call_gemini(prompt, system, json_mode, max_retries)
+            if resp:
+                return resp, prov
+            return self._call_openrouter(prompt, system, json_mode)
 
 
 class AutonomousPhaseBuilder:
@@ -256,12 +279,22 @@ Repeat for all files needed to fully satisfy Phase {phase_num}.
     def static_inspection(self, files_map: Dict[str, str]) -> Tuple[bool, List[str]]:
         """Scans generated files for banned placeholder anti-patterns."""
         flaws = []
-        banned = ["// todo", "todo:", "throw notimplementederror", "placeholder", "dummy_token"]
+        banned_patterns = [
+            r"//\s*todo",
+            r"/\*\s*todo",
+            r"throw\s+notimplementederror",
+            r"//\s*placeholder",
+            r"/\*\s*placeholder",
+            r"dummy_token",
+            r"dummy_key",
+            r"insert_your_key_here",
+            r"//\s*implement\s+later"
+        ]
         for path, code in files_map.items():
             lower = code.lower()
-            for pattern in banned:
-                if pattern in lower:
-                    flaws.append(f"{path}: contains forbidden stub/placeholder '{pattern}'")
+            for pattern in banned_patterns:
+                if re.search(pattern, lower):
+                    flaws.append(f"{path}: contains forbidden stub/placeholder matching '{pattern}'")
             if len(code.strip()) < 150:
                 flaws.append(f"{path}: file content is suspiciously short ({len(code)} bytes)")
         return len(flaws) == 0, flaws
@@ -380,11 +413,12 @@ def main():
     parser = argparse.ArgumentParser(description="Autonomous Phase Builder for Edge Hybrid Agent")
     parser.add_argument("--phase", type=int, choices=[1, 2, 3, 4, 5], help="Execute a single specific phase")
     parser.add_argument("--all", action="store_true", help="Execute all phases (1 through 5) sequentially")
+    parser.add_argument("--prefer-space-bunny", action="store_true", help="Prioritize Space Bunny Alpha on OpenRouter over Gemini")
     args = parser.parse_args()
 
     logger = setup_logger()
     keys = load_keys()
-    llm = CascadingLLMClient(keys, logger)
+    llm = CascadingLLMClient(keys, logger, prefer_space_bunny=args.prefer_space_bunny)
     builder = AutonomousPhaseBuilder(llm, logger)
 
     phases = [
