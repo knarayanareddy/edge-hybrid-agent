@@ -559,10 +559,10 @@ Generate ONLY the exact files listed in the phase specification. Keep each file 
                 self.logger.debug(f"JSON fallback failed: {e}")
 
         if not files_map:
-            self.logger.error(f"[Phase {phase_num}] Could not extract any valid files from response ({len(resp)} chars).")
+            self.logger.error(f"[{phase_id}] Could not extract any valid files from response ({len(resp)} chars).")
             return {}
 
-        self.logger.info(f"[Phase {phase_num}] Extracted {len(files_map)} file(s): {list(files_map.keys())}")
+        self.logger.info(f"[{phase_id}] Extracted {len(files_map)} file(s): {list(files_map.keys())}")
         return files_map
 
     def static_inspection(self, files_map: Dict[str, str]) -> Tuple[bool, List[str]]:
