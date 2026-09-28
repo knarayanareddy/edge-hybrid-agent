@@ -15,6 +15,7 @@ Features:
 
 import os
 import sys
+import re
 import json
 import time
 import socket
@@ -195,38 +196,62 @@ PHASE SPECIFICATION:
 {critique_block}
 
 RULES:
-1. Provide COMPLETE, drop-in, non-stubbed Kotlin code.
+1. Provide COMPLETE, drop-in, non-stubbed Kotlin / configuration code.
 2. NO placeholder comments like '// TODO: Implement later' or dummy returns.
 3. Every file must include complete package declaration and all required imports.
-4. Output your response as a valid JSON object mapping relative file paths to their full file contents.
+4. Output each file using this EXACT clean delimiter format:
 
-Example format:
-{{
-  "app/src/main/java/com/edgehybrid/agent/core/.../FileName.kt": "package ...\\n\\nclass ... {{ ... }}"
-}}
+=== FILE: path/to/FileName.kt ===
+<full file contents here>
+=== END_FILE ===
+
+Repeat for all files needed to fully satisfy Phase {phase_num}.
 """
-        system = "You are an autonomous senior Android engineer. Output valid JSON mapping file paths to code."
+        system = "You are an autonomous senior Android engineer. Output production code using the specified === FILE: ... === delimiters."
         self.logger.info(f"[Phase {phase_num}] Requesting synthesis from LLM cascade...")
-        resp, provider = self.llm.complete(prompt, system=system, json_mode=True)
+        resp, provider = self.llm.complete(prompt, system=system, json_mode=False)
         if not resp:
             self.logger.error(f"[Phase {phase_num}] Failed to get response from any LLM provider.")
             return {}
 
         self.logger.info(f"[Phase {phase_num}] Synthesis received from provider: {provider}")
-        try:
-            # Strip markdown code fences if present
-            cleaned = resp.strip()
-            if cleaned.startswith("```json"):
-                cleaned = cleaned[7:]
-            if cleaned.startswith("```"):
-                cleaned = cleaned[3:]
-            if cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-            files_map = json.loads(cleaned.strip())
-            return files_map
-        except Exception as e:
-            self.logger.error(f"[Phase {phase_num}] Failed to parse JSON response: {e}")
+        files_map = {}
+
+        # 1. Delimiter pattern
+        delimiter_pattern = re.compile(r"=== FILE:\s*([^\n\r]+?)\s*===\s*\n([\s\S]*?)=== END_FILE ===", re.MULTILINE)
+        matches = delimiter_pattern.findall(resp)
+        for rel_path, code in matches:
+            files_map[rel_path.strip()] = code.strip()
+
+        # 2. Markdown header pattern fallback
+        if not files_map:
+            md_pattern = re.compile(r"(?:###|##)\s*(?:FILE:)?\s*`?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)`?\s*\n```(?:kotlin|xml|kts|java|json)?\s*\n([\s\S]*?)```", re.MULTILINE)
+            md_matches = md_pattern.findall(resp)
+            for rel_path, code in md_matches:
+                files_map[rel_path.strip()] = code.strip()
+
+        # 3. JSON fallback
+        if not files_map:
+            try:
+                cleaned = resp.strip()
+                if cleaned.startswith("```json"):
+                    cleaned = cleaned[7:]
+                if cleaned.startswith("```"):
+                    cleaned = cleaned[3:]
+                if cleaned.endswith("```"):
+                    cleaned = cleaned[:-3]
+                parsed = json.loads(cleaned.strip(), strict=False)
+                if isinstance(parsed, dict):
+                    files_map = {k.strip(): str(v).strip() for k, v in parsed.items()}
+            except Exception as e:
+                self.logger.debug(f"JSON fallback failed: {e}")
+
+        if not files_map:
+            self.logger.error(f"[Phase {phase_num}] Could not extract any valid files from response ({len(resp)} chars).")
             return {}
+
+        self.logger.info(f"[Phase {phase_num}] Extracted {len(files_map)} file(s): {list(files_map.keys())}")
+        return files_map
 
     def static_inspection(self, files_map: Dict[str, str]) -> Tuple[bool, List[str]]:
         """Scans generated files for banned placeholder anti-patterns."""
