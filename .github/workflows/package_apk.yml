@@ -41,11 +41,17 @@ jobs:
           fi
           chmod +x ./gradlew
 
+      - name: Run Unit Tests
+        run: |
+          echo "Running unit tests across all agent modules..."
+          ./gradlew testDebugUnitTest --no-daemon
+
       - name: Build Debug APK
         env:
           EDGE_CLOUD_API_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY_1 }}
           EDGE_TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
           EDGE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           EDGE_CLOUD_BASE_URL: ${{ github.event.inputs.base_url || 'https://openrouter.ai/api/v1' }}
           EDGE_CLOUD_MODEL: ${{ github.event.inputs.model || 'google/gemini-2.5-flash' }}
         run: |

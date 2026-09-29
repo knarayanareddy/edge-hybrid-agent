@@ -268,16 +268,20 @@ jobs:
           test_cases = [
               ("Tell me about Achmea in Amsterdam", "General Q&A about Dutch insurance company", None, None),
               ("What's the weather in Amsterdam right now?", "Live weather check", "get_current_weather", None),
-              ("Convert 150 EUR to USD", "Currency conversion", "convert_currency", None),
+              ("Convert 100 degrees Celsius to Fahrenheit", "Temperature unit converter", "convert_temperature", None),
               ("Search Wikipedia for ASML semiconductor", "Wikipedia deep dive", "search_wikipedia", None),
+              ("Convert 150 EUR to USD", "Currency conversion", "convert_currency", None),
               ("Calculate sqrt(144) * 8.5 + 25", "Math evaluator", "calculate_math", None),
               ("What time is it in Tokyo right now?", "World time lookup", "get_world_time", None),
+              ("Check my device battery and available memory", "Device status query", "get_device_status", None),
               ("Can you toggle my flashlight?", "Native hardware action", "toggle_flashlight", None),
               ("Set a timer for 10 minutes for cooking pasta", "Native timer creation", "set_timer", None),
+              ("Save a quick note titled 'Groceries' with content 'Buy milk and eggs'", "Create quick note", "create_quick_note", None),
+              ("Show my recent saved notes", "List quick notes", "list_quick_notes", None),
               ("What color is this square?", "Multimodal Vision (Red Pixel)", None, "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
           ]
 
-          print("\n🧪 EXECUTING MULTI-TOOL & MULTIMODAL VERIFICATION SUITE:")
+          print("\n🧪 EXECUTING FULL MULTI-TOOL & MULTIMODAL VERIFICATION SUITE:")
           for i, (prompt, desc, expected_tool, img_url) in enumerate(test_cases, 1):
               print(f"\n[{i}/{len(test_cases)}] Testing: '{prompt}' ({desc})")
               try:
@@ -289,5 +293,55 @@ jobs:
                   sys.exit(1)
 
           print("\n" + "=" * 70)
-          print("🎉 ALL 9 E2E MULTI-TOOL & VISION TESTS COMPLETED & VERIFIED 100% SUCCESSFULLY!")
+          print(f"🎉 ALL {len(test_cases)} E2E MULTI-TOOL & VISION TESTS COMPLETED & VERIFIED 100% SUCCESSFULLY!")
           EOF
+
+      - name: Verify Gemini Direct API (if configured)
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python3 - << 'EOF'
+          import os, sys, urllib.request, urllib.error, json
+          gemini_key = os.environ.get("GEMINI_KEY", "").strip()
+          if not gemini_key:
+              print("ℹ️ GEMINI_API_KEY not configured or empty, skipping direct Gemini API test.")
+              sys.exit(0)
+
+          print("🔍 Testing Gemini Direct API endpoint...")
+          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
+          payload = {"contents": [{"parts": [{"text": "Reply with 'GEMINI_OK'"}]}]}
+          try:
+              req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
+              with urllib.request.urlopen(req) as resp:
+                  data = json.loads(resp.read().decode("utf-8"))
+                  text = data["candidates"][0]["content"]["parts"][0]["text"]
+                  print(f"   ✅ Gemini Direct API Response: {text.strip()}")
+          except urllib.error.HTTPError as e:
+              print(f"   ⚠️ Gemini Direct API warning HTTP {e.code}: {e.read().decode('utf-8')[:150]}")
+          EOF
+
+      - name: Verify Groq Whisper Endpoint Connectivity (if configured)
+        env:
+          GROQ_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          python3 - << 'EOF'
+          import os, sys, urllib.request, urllib.error, json
+          groq_key = os.environ.get("GROQ_KEY", "").strip()
+          if not groq_key:
+              print("ℹ️ GROQ_API_KEY secret not present yet. Users can enter their free key in Settings tab.")
+              sys.exit(0)
+
+          print("🔍 Testing Groq Whisper API endpoint...")
+          req = urllib.request.Request(
+              "https://api.groq.com/openai/v1/models",
+              headers={"Authorization": f"Bearer {groq_key}"}
+          )
+          try:
+              with urllib.request.urlopen(req) as resp:
+                  models = json.loads(resp.read().decode("utf-8")).get("data", [])
+                  whisper_models = [m["id"] for m in models if "whisper" in m.get("id", "")]
+                  print(f"   ✅ Groq Whisper Models Available: {whisper_models}")
+          except urllib.error.HTTPError as e:
+              print(f"   ⚠️ Groq API warning HTTP {e.code}: {e.read().decode('utf-8')[:150]}")
+          EOF
+
