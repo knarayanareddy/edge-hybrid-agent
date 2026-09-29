@@ -99,7 +99,9 @@ internal data class ChatCompletionRequest(
     @SerialName("stream_options")
     val streamOptions: StreamOptions = StreamOptions(includeUsage = true),
     @SerialName("tool_choice")
-    val toolChoice: String? = null
+    val toolChoice: String? = null,
+    @SerialName("max_tokens")
+    val maxTokens: Int? = 4096
 )
 
 @Serializable

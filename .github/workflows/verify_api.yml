@@ -55,7 +55,8 @@ jobs:
           print("\n[TEST 1] Plain Conversational Inference (tools = null)")
           payload_1 = {
               "model": model,
-              "messages": [{"role": "user", "content": "Respond with 'SYSTEM ONLINE' and one sentence describing yourself."}]
+              "messages": [{"role": "user", "content": "Respond with 'SYSTEM ONLINE' and one sentence describing yourself."}],
+              "max_tokens": 2048
           }
           req_1 = urllib.request.Request(
               "https://openrouter.ai/api/v1/chat/completions",
@@ -125,7 +126,8 @@ jobs:
               "model": model,
               "messages": [{"role": "user", "content": prompt}],
               "tools": tools,
-              "tool_choice": "auto"
+              "tool_choice": "auto",
+              "max_tokens": 2048
           }
 
           req_2 = urllib.request.Request(
