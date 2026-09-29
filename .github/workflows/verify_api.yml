@@ -23,7 +23,7 @@ jobs:
 
       - name: Run Multi-Tool E2E Verification
         env:
-          OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY_1 }}
+          OPENROUTER_KEYS: ${{ secrets.OPENROUTER_API_KEY }},${{ secrets.OPENROUTER_API_KEY_1 }},${{ secrets.OPENROUTER_API_KEY_2 }},${{ secrets.OPENROUTER_API_KEY_3 }},${{ secrets.OPENROUTER_API_KEY_4 }},${{ secrets.OPENROUTER_API_KEY_5 }},${{ secrets.OPENROUTER_API_KEY_6 }}
           MODEL_NAME: ${{ github.event.inputs.model || 'google/gemini-2.5-flash' }}
         run: |
           python3 - << 'EOF'
@@ -33,15 +33,15 @@ jobs:
           import urllib.request
           import urllib.error
 
-          api_key = os.environ.get("OPENROUTER_KEY", "").strip()
+          keys = [k.strip() for k in os.environ.get("OPENROUTER_KEYS", "").split(",") if k.strip()]
           model = os.environ.get("MODEL_NAME", "google/gemini-2.5-flash")
+          current_key_idx = 0
 
-          if not api_key:
-              print("❌ ERROR: OPENROUTER_KEY secret is missing or empty!")
+          if not keys:
+              print("❌ ERROR: No OpenRouter keys configured in secrets!")
               sys.exit(1)
 
-          masked_key = api_key[:8] + "..." + api_key[-4:] if len(api_key) > 12 else "***"
-          print(f"🔑 Using API Key: {masked_key}")
+          print(f"🔑 Loaded {len(keys)} available API keys for failover.")
           print(f"🤖 Testing Model: {model}")
           print("=" * 70)
 
@@ -220,6 +220,7 @@ jobs:
           )
 
           def send_query(prompt, expected_tool=None, image_data_url=None):
+              nonlocal current_key_idx, model
               if image_data_url:
                   user_content = [
                       {"type": "text", "text": prompt},
@@ -228,42 +229,56 @@ jobs:
               else:
                   user_content = prompt
 
-              payload = {
-                  "model": model,
-                  "messages": [
-                      {"role": "system", "content": system_instruction},
-                      {"role": "user", "content": user_content}
-                  ],
-                  "tools": tools,
-                  "tool_choice": "auto",
-                  "max_tokens": 2048
-              }
-              req = urllib.request.Request(
-                  "https://openrouter.ai/api/v1/chat/completions",
-                  data=json.dumps(payload).encode("utf-8"),
-                  headers={
-                      "Authorization": f"Bearer {api_key}",
-                      "Content-Type": "application/json",
-                      "HTTP-Referer": "https://edgehybrid.agent",
-                      "X-Title": "Edge Hybrid Agent Multi-Tool Test"
+              while current_key_idx < len(keys):
+                  active_key = keys[current_key_idx]
+                  payload = {
+                      "model": model,
+                      "messages": [
+                          {"role": "system", "content": system_instruction},
+                          {"role": "user", "content": user_content}
+                      ],
+                      "tools": tools,
+                      "tool_choice": "auto",
+                      "max_tokens": 2048
                   }
-              )
-              with urllib.request.urlopen(req) as resp:
-                  data = json.loads(resp.read().decode("utf-8"))
-                  msg = data["choices"][0]["message"]
-                  if "tool_calls" in msg and msg["tool_calls"]:
-                      tc = msg["tool_calls"][0]
-                      name = tc["function"]["name"]
-                      args = tc["function"]["arguments"]
-                      print(f"   🛠️ Tool Called: {name}")
-                      print(f"   📦 Arguments: {args}")
-                      if expected_tool and name != expected_tool:
-                          print(f"   ⚠️ Expected tool '{expected_tool}' but got '{name}'")
-                      return ("tool", name, args)
-                  else:
-                      snippet = msg.get("content", "").strip()[:180] + "..."
-                      print(f"   💬 Direct Answer: {snippet}")
-                      return ("answer", None, msg.get("content"))
+                  req = urllib.request.Request(
+                      "https://openrouter.ai/api/v1/chat/completions",
+                      data=json.dumps(payload).encode("utf-8"),
+                      headers={
+                          "Authorization": f"Bearer {active_key}",
+                          "Content-Type": "application/json",
+                          "HTTP-Referer": "https://edgehybrid.agent",
+                          "X-Title": "Edge Hybrid Agent Multi-Tool Test"
+                      }
+                  )
+                  try:
+                      with urllib.request.urlopen(req) as resp:
+                          data = json.loads(resp.read().decode("utf-8"))
+                          msg = data["choices"][0]["message"]
+                          if "tool_calls" in msg and msg["tool_calls"]:
+                              tc = msg["tool_calls"][0]
+                              name = tc["function"]["name"]
+                              args = tc["function"]["arguments"]
+                              print(f"   🛠️ Tool Called: {name}")
+                              print(f"   📦 Arguments: {args}")
+                              if expected_tool and name != expected_tool:
+                                  print(f"   ⚠️ Expected tool '{expected_tool}' but got '{name}'")
+                              return ("tool", name, args)
+                          else:
+                              snippet = msg.get("content", "").strip()[:180] + "..."
+                              print(f"   💬 Direct Answer: {snippet}")
+                              return ("answer", None, msg.get("content"))
+                  except urllib.error.HTTPError as e:
+                      if e.code in (402, 429) and current_key_idx + 1 < len(keys):
+                          print(f"   ⚠️ Key {current_key_idx + 1} returned {e.code}, rotating to fallback key...")
+                          current_key_idx += 1
+                          continue
+                      elif e.code in (402, 429) and not model.endswith(":free"):
+                          print(f"   ⚠️ Keys returned {e.code}, switching to free model {model}:free...")
+                          model = model + ":free"
+                          continue
+                      else:
+                          raise
 
           test_cases = [
               ("Tell me about Achmea in Amsterdam", "General Q&A about Dutch insurance company", None, None),
@@ -376,16 +391,17 @@ jobs:
 
       - name: Verify Unified Multi-Service Conversation (Audio + Reasoning + Vision + Tools in 1 Chat)
         env:
-          OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY_1 }}
+          OPENROUTER_KEYS: ${{ secrets.OPENROUTER_API_KEY }},${{ secrets.OPENROUTER_API_KEY_1 }},${{ secrets.OPENROUTER_API_KEY_2 }},${{ secrets.OPENROUTER_API_KEY_3 }},${{ secrets.OPENROUTER_API_KEY_4 }},${{ secrets.OPENROUTER_API_KEY_5 }},${{ secrets.OPENROUTER_API_KEY_6 }}
           GROQ_KEY: ${{ secrets.GROQ_API_KEY }}
           MODEL_NAME: ${{ github.event.inputs.model || 'google/gemini-2.5-flash' }}
         run: |
           python3 - << 'EOF'
           import urllib.request, json, os, io, wave, struct, sys
 
-          openrouter_key = os.environ.get("OPENROUTER_KEY", "").strip()
+          keys = [k.strip() for k in os.environ.get("OPENROUTER_KEYS", "").split(",") if k.strip()]
           groq_key = os.environ.get("GROQ_KEY", "").strip()
           model = os.environ.get("MODEL_NAME", "google/gemini-2.5-flash")
+          current_key_idx = 0
 
           print("=" * 70)
           print("🌟 RUNNING UNIFIED MULTI-SERVICE CONVERSATION TEST")
@@ -437,23 +453,39 @@ jobs:
           ]
 
           def call_llm():
-              req = urllib.request.Request(
-                  "https://openrouter.ai/api/v1/chat/completions",
-                  data=json.dumps({
-                      "model": model,
-                      "messages": messages,
-                      "tools": tools,
-                      "tool_choice": "auto"
-                  }).encode("utf-8"),
-                  headers={
-                      "Authorization": f"Bearer {openrouter_key}",
-                      "Content-Type": "application/json",
-                      "HTTP-Referer": "https://edgehybrid.agent"
-                  }
-              )
-              with urllib.request.urlopen(req) as resp:
-                  data = json.loads(resp.read().decode())
-                  return data["choices"][0]["message"]
+              nonlocal current_key_idx, model
+              while current_key_idx < len(keys):
+                  active_key = keys[current_key_idx]
+                  req = urllib.request.Request(
+                      "https://openrouter.ai/api/v1/chat/completions",
+                      data=json.dumps({
+                          "model": model,
+                          "messages": messages,
+                          "tools": tools,
+                          "tool_choice": "auto"
+                      }).encode("utf-8"),
+                      headers={
+                          "Authorization": f"Bearer {active_key}",
+                          "Content-Type": "application/json",
+                          "HTTP-Referer": "https://edgehybrid.agent"
+                      }
+                  )
+                  try:
+                      with urllib.request.urlopen(req) as resp:
+                          data = json.loads(resp.read().decode())
+                          return data["choices"][0]["message"]
+                  except urllib.error.HTTPError as e:
+                      if e.code in (402, 429) and current_key_idx + 1 < len(keys):
+                          print(f"   ⚠️ Key {current_key_idx + 1} returned {e.code}, rotating to fallback key...")
+                          current_key_idx += 1
+                          continue
+                      elif e.code in (402, 429) and not model.endswith(":free"):
+                          print(f"   ⚠️ Keys returned {e.code}, switching to free model {model}:free...")
+                          model = model + ":free"
+                          continue
+                      else:
+                          print(f"   ❌ HTTP Error {e.code}: {e.read().decode()}")
+                          raise
 
           # Turn 1 Evaluation
           print("\n[Turn 1: Transcript Reasoning]")
