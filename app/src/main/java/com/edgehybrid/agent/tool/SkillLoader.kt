@@ -660,7 +660,7 @@ class BuiltInSkillLoader @Inject constructor(
                 throw IllegalArgumentException("Unexpected character: " + ch.toChar())
             }
 
-            if (eat('^'.code)) x = kotlin.math.pow(x, parseFactor())
+            if (eat('^'.code)) x = Math.pow(x, parseFactor())
             return x
         }
 
