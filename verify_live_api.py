@@ -65,7 +65,8 @@ for idx, key in enumerate(candidate_keys):
                 {"role": "user", "content": "Set an alarm for 7:30 AM tomorrow labeled Morning Run"}
             ],
             "tools": tools_payload,
-            "tool_choice": "auto"
+            "tool_choice": "auto",
+            "max_tokens": 1024
         }
 
         req = urllib.request.Request(
