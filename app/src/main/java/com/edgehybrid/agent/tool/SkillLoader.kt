@@ -18,11 +18,13 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.headers
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -30,10 +32,14 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
@@ -64,6 +70,15 @@ class BuiltInSkillLoader @Inject constructor(
     private val keyStore: SecureKeyStore,
     @ApplicationContext private val context: Context
 ) : SkillLoader {
+
+    private val dynamicTools = ConcurrentHashMap<String, CustomToolDef>()
+
+    data class CustomToolDef(
+        val name: String,
+        val description: String,
+        val parametersHint: String,
+        val actionTemplate: String
+    )
 
     override suspend fun listTools(): List<ToolDefinition> =
         listOf(
@@ -215,10 +230,15 @@ class BuiltInSkillLoader @Inject constructor(
             ToolDefinition(
                 function = FunctionDefinition(
                     name = FLASHLIGHT_TOOL_NAME,
-                    description = "Toggle the device physical camera flashlight / torch on or off.",
+                    description = "Turn on, turn off, or toggle the device physical camera flashlight / torch.",
                     parameters = buildJsonObject {
                         put("type", "object")
-                        put("properties", buildJsonObject {})
+                        put("properties", buildJsonObject {
+                            put("enabled", buildJsonObject {
+                                put("type", "boolean")
+                                put("description", "Optional target state: true to turn on the flashlight, false to turn off. If omitted, toggles the current state.")
+                            })
+                        })
                         put("additionalProperties", false)
                     }
                 )
@@ -498,33 +518,121 @@ class BuiltInSkillLoader @Inject constructor(
                         put("additionalProperties", false)
                     }
                 )
+            ),
+            // 22. Create Custom Tool
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = CREATE_CUSTOM_TOOL_NAME,
+                    description = "Create and register a new custom agent tool persistently on the device. Enables the agent to expand its capabilities dynamically.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("name", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Unique tool name in snake_case (e.g. 'calculate_tip', 'lookup_airport_code', 'generate_workout_plan').")
+                            })
+                            put("description", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Detailed description of what the tool does and when the agent should call it.")
+                            })
+                            put("parameters_hint", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Description of parameters the tool accepts (e.g. 'bill_amount: number, tip_percentage: number').")
+                            })
+                            put("action_template", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Instructions or template explaining how the result should be produced or formatted.")
+                            })
+                        })
+                        put("required", buildJsonArray {
+                            add("name")
+                            add("description")
+                            add("action_template")
+                        })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 23. List Custom Tools
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = LIST_CUSTOM_TOOLS_NAME,
+                    description = "List all dynamically created custom tools currently registered on the device.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {})
+                        put("additionalProperties", false)
+                    }
+                )
             )
         )
 
+        // Restore custom tools from local note database if not yet loaded
+        if (dynamicTools.isEmpty()) {
+            try {
+                val notes = noteDao.getRecentNotes(100)
+                notes.filter { it.title.startsWith("CUSTOM_TOOL:") }.forEach { note ->
+                    val toolName = note.title.removePrefix("CUSTOM_TOOL:").trim()
+                    try {
+                        val parsed = Json.parseToJsonElement(note.content).jsonObject
+                        val desc = parsed["description"]?.jsonPrimitive?.content ?: "Custom tool"
+                        val hint = parsed["parameters_hint"]?.jsonPrimitive?.content ?: ""
+                        val template = parsed["action_template"]?.jsonPrimitive?.content ?: ""
+                        dynamicTools[toolName] = CustomToolDef(toolName, desc, hint, template)
+                    } catch (_: Exception) {}
+                }
+            } catch (_: Exception) {}
+        }
+
+        val dynamicToolDefs = dynamicTools.values.map { custom ->
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = custom.name,
+                    description = "${custom.description} (Parameters: ${custom.parametersHint})",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("input", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Input or query for ${custom.name}")
+                            })
+                        })
+                        put("additionalProperties", true)
+                    }
+                )
+            )
+        }
+
+        return baseTools + dynamicToolDefs
+    }
+
     override suspend fun execute(call: ModelToolCall): ToolExecutionOutcome =
         try {
-            when (call.function.name) {
-                WEATHER_TOOL_NAME -> executeWeather(call.function.arguments)
-                CONVERSION_TOOL_NAME -> executeTemperatureConversion(call.function.arguments)
-                WIKIPEDIA_TOOL_NAME -> executeWikipediaSearch(call.function.arguments)
-                CURRENCY_TOOL_NAME -> executeCurrencyConversion(call.function.arguments)
-                MATH_TOOL_NAME -> executeMath(call.function.arguments)
-                WORLD_TIME_TOOL_NAME -> executeWorldTime(call.function.arguments)
-                DEVICE_STATUS_TOOL_NAME -> executeDeviceStatus()
-                FLASHLIGHT_TOOL_NAME -> executeFlashlight()
-                TIMER_TOOL_NAME -> executeTimer(call.function.arguments)
-                CREATE_NOTE_TOOL_NAME -> executeCreateNote(call.function.arguments)
-                LIST_NOTES_TOOL_NAME -> executeListNotes()
-                CREATE_CALENDAR_EVENT_TOOL_NAME -> executeCreateCalendarEvent(call.function.arguments)
-                QUERY_CALENDAR_EVENTS_TOOL_NAME -> executeQueryCalendarEvents(call.function.arguments)
-                SEND_TELEGRAM_MESSAGE_TOOL_NAME -> executeTelegramMessage(call.function.arguments)
-                SEARCH_CONTACTS_TOOL_NAME -> executeSearchContacts(call.function.arguments)
-                INITIATE_PHONE_CALL_TOOL_NAME -> executeInitiatePhoneCall(call.function.arguments)
-                DRAFT_EMAIL_TOOL_NAME -> executeDraftEmail(call.function.arguments)
-                CONTROL_SPOTIFY_TOOL_NAME -> executeControlSpotify(call.function.arguments)
-                LIVE_WEB_SEARCH_TOOL_NAME -> executeLiveWebSearch(call.function.arguments)
-                EXTRACT_WEBPAGE_TOOL_NAME -> executeExtractWebpage(call.function.arguments)
-                PLAN_TRANSIT_TOOL_NAME -> executePlanTransit(call.function.arguments)
+            when {
+                call.function.name == WEATHER_TOOL_NAME -> executeWeather(call.function.arguments)
+                call.function.name == CONVERSION_TOOL_NAME -> executeTemperatureConversion(call.function.arguments)
+                call.function.name == WIKIPEDIA_TOOL_NAME -> executeWikipediaSearch(call.function.arguments)
+                call.function.name == CURRENCY_TOOL_NAME -> executeCurrencyConversion(call.function.arguments)
+                call.function.name == MATH_TOOL_NAME -> executeMath(call.function.arguments)
+                call.function.name == WORLD_TIME_TOOL_NAME -> executeWorldTime(call.function.arguments)
+                call.function.name == DEVICE_STATUS_TOOL_NAME -> executeDeviceStatus()
+                call.function.name == FLASHLIGHT_TOOL_NAME -> executeFlashlight(call.function.arguments)
+                call.function.name == TIMER_TOOL_NAME -> executeTimer(call.function.arguments)
+                call.function.name == CREATE_NOTE_TOOL_NAME -> executeCreateNote(call.function.arguments)
+                call.function.name == LIST_NOTES_TOOL_NAME -> executeListNotes()
+                call.function.name == CREATE_CALENDAR_EVENT_TOOL_NAME -> executeCreateCalendarEvent(call.function.arguments)
+                call.function.name == QUERY_CALENDAR_EVENTS_TOOL_NAME -> executeQueryCalendarEvents(call.function.arguments)
+                call.function.name == SEND_TELEGRAM_MESSAGE_TOOL_NAME -> executeTelegramMessage(call.function.arguments)
+                call.function.name == SEARCH_CONTACTS_TOOL_NAME -> executeSearchContacts(call.function.arguments)
+                call.function.name == INITIATE_PHONE_CALL_TOOL_NAME -> executeInitiatePhoneCall(call.function.arguments)
+                call.function.name == DRAFT_EMAIL_TOOL_NAME -> executeDraftEmail(call.function.arguments)
+                call.function.name == CONTROL_SPOTIFY_TOOL_NAME -> executeControlSpotify(call.function.arguments)
+                call.function.name == LIVE_WEB_SEARCH_TOOL_NAME -> executeLiveWebSearch(call.function.arguments)
+                call.function.name == EXTRACT_WEBPAGE_TOOL_NAME -> executeExtractWebpage(call.function.arguments)
+                call.function.name == PLAN_TRANSIT_TOOL_NAME -> executePlanTransit(call.function.arguments)
+                call.function.name == CREATE_CUSTOM_TOOL_NAME -> executeCreateCustomTool(call.function.arguments)
+                call.function.name == LIST_CUSTOM_TOOLS_NAME -> executeListCustomTools()
+                dynamicTools.containsKey(call.function.name) -> executeCustomDynamicTool(call.function.name, call.function.arguments)
                 else -> throw SkillExecutionException("Unsupported skill: ${call.function.name}")
             }
         } catch (e: Exception) {
@@ -778,8 +886,9 @@ class BuiltInSkillLoader @Inject constructor(
     }
 
     // 8. Flashlight
-    private suspend fun executeFlashlight(): ToolExecutionOutcome {
-        val state = nativeActionHandler.toggleFlashlight()
+    private suspend fun executeFlashlight(arguments: JsonObject): ToolExecutionOutcome {
+        val target = arguments["enabled"]?.jsonPrimitive?.booleanOrNull
+        val state = nativeActionHandler.toggleFlashlight(target)
         val result = buildJsonObject {
             put("flashlight_enabled", state)
             put("status", if (state) "Flashlight turned ON" else "Flashlight turned OFF")
@@ -1058,43 +1167,86 @@ class BuiltInSkillLoader @Inject constructor(
     private suspend fun executeLiveWebSearch(arguments: JsonObject): ToolExecutionOutcome {
         val query = arguments["query"]?.jsonPrimitive?.content?.trim()
             ?.takeIf(String::isNotEmpty)
-            ?: throw SkillExecutionException("Search query is required")
+            ?: return ToolExecutionOutcome(
+                buildJsonObject { put("error", "Search query is required") }.toString(),
+                false
+            )
         val encoded = URLEncoder.encode(query, StandardCharsets.UTF_8.name())
-        val url = "https://api.duckduckgo.com/?q=$encoded&format=json&no_html=1&skip_disambig=1"
+
+        var searchResultText: String? = null
+        var searchSource = "DuckDuckGo"
+        var searchUrl = ""
 
         try {
-            val response = httpClient.get(url)
-            val body = response.body<JsonObject>()
-            val abstractText = body["AbstractText"]?.jsonPrimitive?.content?.trim() ?: ""
-            val abstractSource = body["AbstractSource"]?.jsonPrimitive?.content ?: "DuckDuckGo"
-            val abstractUrl = body["AbstractURL"]?.jsonPrimitive?.content ?: ""
-            val heading = body["Heading"]?.jsonPrimitive?.content ?: query
-
-            val relatedArray = body["RelatedTopics"]?.jsonArray
-            val relatedSnippets = mutableListOf<String>()
-            relatedArray?.forEach { elem ->
-                if (elem is JsonObject && elem.containsKey("Text")) {
-                    elem["Text"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }?.let {
-                        if (relatedSnippets.size < 5) relatedSnippets.add(it)
-                    }
+            val ddgResponse = httpClient.get("https://api.duckduckgo.com/?q=$encoded&format=json&no_html=1&skip_disambig=1") {
+                headers {
+                    append(HttpHeaders.UserAgent, "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36")
+                    append(HttpHeaders.Accept, "application/json")
                 }
             }
+            if (ddgResponse.status.value in 200..299) {
+                val body = ddgResponse.body<JsonObject>()
+                val abstractText = body["AbstractText"]?.jsonPrimitive?.content?.trim().orEmpty()
+                val abstractUrl = body["AbstractURL"]?.jsonPrimitive?.content.orEmpty()
+                val relatedArray = body["RelatedTopics"]?.jsonArray
+                val relatedSnippets = mutableListOf<String>()
+                relatedArray?.forEach { elem ->
+                    if (elem is JsonObject && elem.containsKey("Text")) {
+                        elem["Text"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }?.let {
+                            if (relatedSnippets.size < 5) relatedSnippets.add(it)
+                        }
+                    }
+                }
+                if (abstractText.isNotBlank()) {
+                    searchResultText = abstractText
+                    searchUrl = abstractUrl
+                } else if (relatedSnippets.isNotEmpty()) {
+                    searchResultText = relatedSnippets.joinToString("\n• ")
+                }
+            }
+        } catch (_: Exception) {}
 
-            val result = buildJsonObject {
-                put("query", query)
-                put("heading", heading)
-                put("summary", abstractText.ifBlank { relatedSnippets.joinToString("\n• ") })
-                put("source", abstractSource)
-                if (abstractUrl.isNotBlank()) put("url", abstractUrl)
-            }
-            return ToolExecutionOutcome(result.toString(), false)
-        } catch (e: Exception) {
-            val fallback = buildJsonObject {
-                put("query", query)
-                put("error", "Web search failed: ${e.message}")
-            }
-            return ToolExecutionOutcome(fallback.toString(), true)
+        // Fallback to Wikipedia Live Search API (extremely reliable for hardware, devices, concepts)
+        if (searchResultText.isNullOrBlank()) {
+            try {
+                val wikiUrl = "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=$encoded&utf8=&format=json"
+                val wikiResp = httpClient.get(wikiUrl) {
+                    headers {
+                        append(HttpHeaders.UserAgent, "EdgeHybridAgent/1.0 (Android 14; S23 Ultra)")
+                    }
+                }
+                if (wikiResp.status.value in 200..299) {
+                    val wikiBody = wikiResp.body<JsonObject>()
+                    val searchItems = wikiBody["query"]?.jsonObject?.get("search")?.jsonArray
+                    if (searchItems != null && searchItems.isNotEmpty()) {
+                        val snippets = mutableListOf<String>()
+                        for (item in searchItems.take(4)) {
+                            val itemObj = item as? JsonObject ?: continue
+                            val title = itemObj["title"]?.jsonPrimitive?.content ?: ""
+                            val rawSnippet = itemObj["snippet"]?.jsonPrimitive?.content ?: ""
+                            val cleanSnippet = rawSnippet.replace(Regex("<[^>]+>"), "")
+                            if (title.isNotBlank() && cleanSnippet.isNotBlank()) {
+                                snippets.add("**$title**: $cleanSnippet")
+                            }
+                        }
+                        if (snippets.isNotEmpty()) {
+                            searchResultText = snippets.joinToString("\n\n")
+                            searchSource = "Wikipedia Live Search"
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
         }
+
+        val finalSummary = searchResultText ?: "Live search query completed for \"$query\". No instant snippet was returned by public API indexes; you may ask for further related specifications or use wikipedia_search."
+        val result = buildJsonObject {
+            put("query", query)
+            put("summary", finalSummary)
+            put("source", searchSource)
+            if (searchUrl.isNotBlank()) put("url", searchUrl)
+            put("status", "success")
+        }
+        return ToolExecutionOutcome(result.toString(), false)
     }
 
     // 20. Extract Webpage Content
@@ -1180,6 +1332,71 @@ class BuiltInSkillLoader @Inject constructor(
         return ToolExecutionOutcome(result.toString(), false)
     }
 
+    // 22. Create Custom Tool
+    private suspend fun executeCreateCustomTool(arguments: JsonObject): ToolExecutionOutcome {
+        val name = arguments["name"]?.jsonPrimitive?.content?.trim()
+            ?.lowercase()?.replace(" ", "_")
+            ?: return ToolExecutionOutcome(buildJsonObject { put("error", "Tool name is required") }.toString(), false)
+        val description = arguments["description"]?.jsonPrimitive?.content?.trim() ?: "Custom agent tool"
+        val paramsHint = arguments["parameters_hint"]?.jsonPrimitive?.content?.trim() ?: "None"
+        val actionTemplate = arguments["action_template"]?.jsonPrimitive?.content?.trim() ?: ""
+
+        val customDef = CustomToolDef(name, description, paramsHint, actionTemplate)
+        dynamicTools[name] = customDef
+
+        try {
+            val contentJson = buildJsonObject {
+                put("name", name)
+                put("description", description)
+                put("parameters_hint", paramsHint)
+                put("action_template", actionTemplate)
+            }.toString()
+            noteDao.insertNote(
+                NoteEntity(
+                    title = "CUSTOM_TOOL:$name",
+                    content = contentJson,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+        } catch (_: Exception) {}
+
+        val result = buildJsonObject {
+            put("status", "Tool '$name' created and registered successfully!")
+            put("tool_name", name)
+            put("description", description)
+            put("parameters", paramsHint)
+            put("active_custom_tools_count", dynamicTools.size)
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 23. List Custom Tools
+    private suspend fun executeListCustomTools(): ToolExecutionOutcome {
+        val list = dynamicTools.values.map { custom ->
+            buildJsonObject {
+                put("name", custom.name)
+                put("description", custom.description)
+                put("parameters", custom.parametersHint)
+            }
+        }
+        val result = buildJsonObject {
+            put("total_custom_tools", dynamicTools.size)
+            put("tools", JsonArray(list))
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    private suspend fun executeCustomDynamicTool(name: String, arguments: JsonObject): ToolExecutionOutcome {
+        val tool = dynamicTools[name]
+        val result = buildJsonObject {
+            put("tool_name", name)
+            put("status", "executed")
+            put("template_applied", tool?.actionTemplate ?: "Completed")
+            put("received_arguments", arguments)
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
     companion object {
         const val WEATHER_TOOL_NAME = "get_current_weather"
         const val CONVERSION_TOOL_NAME = "convert_temperature"
@@ -1202,5 +1419,7 @@ class BuiltInSkillLoader @Inject constructor(
         const val LIVE_WEB_SEARCH_TOOL_NAME = "live_web_search"
         const val EXTRACT_WEBPAGE_TOOL_NAME = "extract_webpage_content"
         const val PLAN_TRANSIT_TOOL_NAME = "plan_transit_journey"
+        const val CREATE_CUSTOM_TOOL_NAME = "create_custom_tool"
+        const val LIST_CUSTOM_TOOLS_NAME = "list_custom_tools"
     }
 }

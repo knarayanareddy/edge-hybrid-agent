@@ -39,6 +39,17 @@ class NativeActionHandler @Inject constructor(
     private val flashlightMutex = Mutex()
     private var isTorchOn: Boolean = false
 
+    init {
+        try {
+            val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
+            cameraManager?.registerTorchCallback(object : CameraManager.TorchCallback() {
+                override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
+                    isTorchOn = enabled
+                }
+            }, null)
+        } catch (_: Exception) {}
+    }
+
     suspend fun createCalendarEvent(
         title: String,
         startTime: Long? = null,
@@ -115,31 +126,22 @@ class NativeActionHandler @Inject constructor(
         }
 
     @SuppressLint("MissingPermission")
-    suspend fun toggleFlashlight(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun toggleFlashlight(targetState: Boolean? = null): Boolean = withContext(Dispatchers.IO) {
         val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
+            ?: return@withContext false
 
-        if (cameraManager == null) {
-            false
-        } else {
-            flashlightMutex.withLock {
-                try {
-                    val cameraId = findTorchCamera(cameraManager)
+        flashlightMutex.withLock {
+            try {
+                val cameraId = findTorchCamera(cameraManager)
+                    ?: cameraManager.cameraIdList.firstOrNull()
+                    ?: "0"
 
-                    if (cameraId == null) {
-                        false
-                    } else {
-                        val enabled = !isTorchOn
-                        cameraManager.setTorchMode(cameraId, enabled)
-                        isTorchOn = enabled
-                        enabled
-                    }
-                } catch (_: CameraAccessException) {
-                    false
-                } catch (_: IllegalArgumentException) {
-                    false
-                } catch (_: SecurityException) {
-                    false
-                }
+                val desired = targetState ?: !isTorchOn
+                cameraManager.setTorchMode(cameraId, desired)
+                isTorchOn = desired
+                desired
+            } catch (_: Exception) {
+                false
             }
         }
     }

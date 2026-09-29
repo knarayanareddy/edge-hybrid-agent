@@ -62,14 +62,133 @@ data class ToolActivityUi(
 class ChatViewModel @Inject constructor(
     private val agentLoop: AgentLoop,
     private val keyStore: com.edgehybrid.agent.data.local.SecureKeyStore? = null,
-    private val groqWhisperService: com.edgehybrid.agent.data.remote.GroqWhisperService? = null
+    private val groqWhisperService: com.edgehybrid.agent.data.remote.GroqWhisperService? = null,
+    private val chatDao: com.edgehybrid.agent.data.local.ChatDao? = null
 ) : ViewModel() {
+
+    companion object {
+        private const val DEFAULT_SESSION_ID = "default_chat_session"
+    }
 
     private val mutableUiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = mutableUiState.asStateFlow()
 
     private var generationJob: Job? = null
     private var pendingRetry: PendingRetry? = null
+
+    init {
+        loadChatHistory()
+    }
+
+    private fun loadChatHistory() {
+        viewModelScope.launch {
+            try {
+                chatDao?.let { dao ->
+                    if (dao.getSessionById(DEFAULT_SESSION_ID) == null) {
+                        dao.insertSession(
+                            com.edgehybrid.agent.data.local.ChatSessionEntity(
+                                id = DEFAULT_SESSION_ID,
+                                title = "Default Session"
+                            )
+                        )
+                    }
+                    val entities = dao.getMessagesListForSession(DEFAULT_SESSION_ID)
+                    if (entities.isNotEmpty()) {
+                        val loaded = entities.map { entity ->
+                            ChatMessageUi(
+                                id = entity.id,
+                                role = if (entity.role.equals("user", ignoreCase = true)) ChatMessageRole.USER else ChatMessageRole.ASSISTANT,
+                                content = entity.content,
+                                imageDataUrl = entity.imageUrlsJson,
+                                deliveryState = MessageDeliveryState.COMPLETE
+                            )
+                        }
+                        mutableUiState.update { it.copy(messages = loaded) }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "Failed to restore persistent chat history", e)
+            }
+        }
+    }
+
+    private fun persistMessage(message: ChatMessageUi) {
+        viewModelScope.launch {
+            try {
+                chatDao?.let { dao ->
+                    if (dao.getSessionById(DEFAULT_SESSION_ID) == null) {
+                        dao.insertSession(
+                            com.edgehybrid.agent.data.local.ChatSessionEntity(
+                                id = DEFAULT_SESSION_ID,
+                                title = "Default Session"
+                            )
+                        )
+                    }
+                    dao.insertMessage(
+                        com.edgehybrid.agent.data.local.ChatMessageEntity(
+                            id = message.id,
+                            sessionId = DEFAULT_SESSION_ID,
+                            role = if (message.role == ChatMessageRole.USER) "user" else "assistant",
+                            content = message.content,
+                            imageUrlsJson = message.imageDataUrl,
+                            createdAt = System.currentTimeMillis()
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "Failed to persist chat message", e)
+            }
+        }
+    }
+
+    fun cancelGeneration() {
+        val job = generationJob
+        if (job != null && job.isActive) {
+            job.cancel()
+            generationJob = null
+        }
+        var stoppedMsg: ChatMessageUi? = null
+        mutableUiState.update { state ->
+            val updated = state.messages.map { msg ->
+                if (msg.deliveryState == MessageDeliveryState.STREAMING) {
+                    val finalContent = if (msg.content.isBlank()) "[Generation stopped by user]" else "${msg.content}\n\n[Stopped by user]"
+                    val stopped = msg.copy(
+                        content = finalContent,
+                        deliveryState = MessageDeliveryState.COMPLETE
+                    )
+                    stoppedMsg = stopped
+                    stopped
+                } else {
+                    msg
+                }
+            }
+            state.copy(
+                messages = updated,
+                isGenerating = false,
+                errorMessage = null
+            )
+        }
+        stoppedMsg?.let { persistMessage(it) }
+    }
+
+    fun clearChat() {
+        generationJob?.cancel()
+        generationJob = null
+        mutableUiState.update {
+            it.copy(
+                messages = emptyList(),
+                isGenerating = false,
+                errorMessage = null
+            )
+        }
+        viewModelScope.launch {
+            try {
+                chatDao?.deleteMessagesForSession(DEFAULT_SESSION_ID)
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "Failed to clear chat session", e)
+            }
+        }
+    }
 
     fun transcribeMeetingAudio(
         audioBytes: ByteArray,
@@ -117,6 +236,8 @@ class ChatViewModel @Inject constructor(
             imageDataUrl = imageDataUrl,
             deliveryState = MessageDeliveryState.COMPLETE
         )
+        persistMessage(userMessage)
+
         history += ChatMessage(
             role = ChatRoles.USER,
             content = normalizedText,
@@ -283,6 +404,7 @@ class ChatViewModel @Inject constructor(
             }
 
             is AgentStreamEvent.Completed -> {
+                var finishedMsg: ChatMessageUi? = null
                 updateMessage(assistantMessageId) { message ->
                     val content = if (
                         message.content.isBlank() &&
@@ -293,12 +415,15 @@ class ChatViewModel @Inject constructor(
                         message.content
                     }
 
-                    message.copy(
+                    val updated = message.copy(
                         content = content,
                         deliveryState = MessageDeliveryState.COMPLETE,
                         recoveryMessage = null
                     )
+                    finishedMsg = updated
+                    updated
                 }
+                finishedMsg?.let { persistMessage(it) }
                 pendingRetry = null
                 mutableUiState.update { state ->
                     state.copy(
@@ -344,13 +469,17 @@ class ChatViewModel @Inject constructor(
         assistantMessageId: String,
         message: String
     ) {
+        var failedMsg: ChatMessageUi? = null
         updateMessage(assistantMessageId) { assistantMessage ->
-            assistantMessage.copy(
+            val updated = assistantMessage.copy(
                 content = assistantMessage.content.ifBlank { message },
                 deliveryState = MessageDeliveryState.FAILED,
                 recoveryMessage = null
             )
+            failedMsg = updated
+            updated
         }
+        failedMsg?.let { persistMessage(it) }
         pendingRetry = null
         mutableUiState.update { state ->
             state.copy(

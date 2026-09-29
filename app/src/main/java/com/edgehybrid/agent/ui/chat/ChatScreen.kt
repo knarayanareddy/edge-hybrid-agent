@@ -37,9 +37,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -91,6 +93,8 @@ fun ChatRoute(
     ChatScreen(
         state = state,
         onSend = { text, imageDataUrl -> viewModel.send(text, imageDataUrl) },
+        onCancel = viewModel::cancelGeneration,
+        onClearChat = viewModel::clearChat,
         onRetry = viewModel::retryRecovery,
         onTranscribeAudio = viewModel::transcribeMeetingAudio,
         onOpenSettings = onOpenSettings
@@ -102,6 +106,8 @@ fun ChatRoute(
 fun ChatScreen(
     state: ChatUiState,
     onSend: (String, String?) -> Unit,
+    onCancel: () -> Unit = {},
+    onClearChat: () -> Unit = {},
     onRetry: () -> Unit,
     onTranscribeAudio: (ByteArray, String, (String) -> Unit, (String) -> Unit) -> Unit = { _, _, _, _ -> },
     onOpenSettings: () -> Unit = {}
@@ -223,13 +229,16 @@ fun ChatScreen(
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "Multimodal Vision • Groq Whisper • 21 Tools",
+                            text = "Multimodal Vision • Groq Whisper • 23 Tools",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
                 actions = {
+                    IconButton(onClick = onClearChat) {
+                        Icon(Icons.Default.Delete, contentDescription = "Clear Chat History")
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Check, contentDescription = "Settings")
                     }
@@ -364,10 +373,12 @@ fun ChatScreen(
             MessageComposer(
                 draft = draft,
                 enabled = !state.isGenerating,
+                isGenerating = state.isGenerating,
                 attachedBitmap = attachedBitmap,
                 attachedAudioName = attachedAudioName,
                 isTranscribingAudio = isTranscribingAudio,
                 audioTranscriptionError = audioTranscriptionError,
+                onCancel = onCancel,
                 onRemoveAttachment = {
                     attachedBitmap = null
                     attachedDataUrl = null
@@ -578,10 +589,12 @@ private fun RecoveryAction(
 private fun MessageComposer(
     draft: String,
     enabled: Boolean,
+    isGenerating: Boolean = false,
     attachedBitmap: Bitmap?,
     attachedAudioName: String? = null,
     isTranscribingAudio: Boolean = false,
     audioTranscriptionError: String? = null,
+    onCancel: () -> Unit = {},
     onRemoveAttachment: () -> Unit,
     onPickPhoto: () -> Unit,
     onPickAudio: () -> Unit = {},
@@ -783,17 +796,27 @@ private fun MessageComposer(
                     )
                 )
 
-                Button(
-                    onClick = onSend,
-                    enabled = enabled && (draft.isNotBlank() || attachedBitmap != null)
-                ) {
-                    if (stateIsGeneratingFromButton(enabled)) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
+                if (isGenerating) {
+                    Button(
+                        onClick = onCancel,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
                         )
-                    } else {
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Stop",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "Stop")
+                    }
+                } else {
+                    Button(
+                        onClick = onSend,
+                        enabled = enabled && (draft.isNotBlank() || attachedBitmap != null)
+                    ) {
                         Text(text = stringResource(R.string.send))
                     }
                 }
