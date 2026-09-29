@@ -223,7 +223,7 @@ fun ChatScreen(
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "Multimodal Vision • Voice • 11 Tools",
+                            text = "Multimodal Vision • Groq Whisper • 21 Tools",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
