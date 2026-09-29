@@ -33,6 +33,7 @@ fun SettingsScreen(
     var openRouterKey by remember { mutableStateOf(keyStore.getOpenRouterApiKey()) }
     var typeSafeKey by remember { mutableStateOf(keyStore.getTypeSafeApiKey()) }
     var geminiKey by remember { mutableStateOf(keyStore.getGeminiApiKey()) }
+    var groqKey by remember { mutableStateOf(keyStore.getGroqApiKey()) }
     var selectedModel by remember { mutableStateOf(keyStore.getSelectedCloudModel()) }
     var jevEnabled by remember { mutableStateOf(keyStore.isJevRoutingEnabled()) }
     var localFallbackEnabled by remember { mutableStateOf(keyStore.isLocalFallbackEnabled()) }
@@ -115,6 +116,18 @@ fun SettingsScreen(
             }
 
             item {
+                OutlinedTextField(
+                    value = groqKey,
+                    onValueChange = { groqKey = it },
+                    label = { Text("Groq Whisper API Key (Free STT)") },
+                    placeholder = { Text("gsk_...") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    supportingText = { Text("Used for Whisper Large meeting transcription (free at console.groq.com)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text(
                     text = "Inference & Routing",
@@ -166,6 +179,7 @@ fun SettingsScreen(
                         keyStore.setOpenRouterApiKey(openRouterKey)
                         keyStore.setTypeSafeApiKey(typeSafeKey)
                         keyStore.setGeminiApiKey(geminiKey)
+                        keyStore.setGroqApiKey(groqKey)
                         keyStore.setSelectedCloudModel(selectedModel)
                         keyStore.setJevRoutingEnabled(jevEnabled)
                         keyStore.setLocalFallbackEnabled(localFallbackEnabled)

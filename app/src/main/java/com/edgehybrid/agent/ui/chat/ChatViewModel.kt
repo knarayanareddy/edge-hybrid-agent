@@ -60,7 +60,9 @@ data class ToolActivityUi(
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    private val agentLoop: AgentLoop
+    private val agentLoop: AgentLoop,
+    private val keyStore: com.edgehybrid.agent.data.local.SecureKeyStore? = null,
+    private val groqWhisperService: com.edgehybrid.agent.data.remote.GroqWhisperService? = null
 ) : ViewModel() {
 
     private val mutableUiState = MutableStateFlow(ChatUiState())
@@ -68,6 +70,34 @@ class ChatViewModel @Inject constructor(
 
     private var generationJob: Job? = null
     private var pendingRetry: PendingRetry? = null
+
+    fun transcribeMeetingAudio(
+        audioBytes: ByteArray,
+        fileName: String,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val groqKey = keyStore?.getGroqApiKey().orEmpty()
+        if (groqKey.isBlank()) {
+            onError("Groq API Key is not configured. Please open Settings and enter your free Groq API key from console.groq.com.")
+            return
+        }
+
+        val whisper = groqWhisperService
+        if (whisper == null) {
+            onError("Groq Whisper service is not initialized.")
+            return
+        }
+
+        viewModelScope.launch {
+            val result = whisper.transcribeAudio(audioBytes, fileName, groqKey)
+            result.onSuccess { text ->
+                onSuccess(text)
+            }.onFailure { err ->
+                onError(err.message ?: "Audio transcription failed.")
+            }
+        }
+    }
 
     fun send(userText: String, imageDataUrl: String? = null) {
         val normalizedText = userText.trim()

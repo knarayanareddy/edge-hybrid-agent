@@ -67,10 +67,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import android.provider.OpenableColumns
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.edgehybrid.agent.R
@@ -90,6 +92,7 @@ fun ChatRoute(
         state = state,
         onSend = { text, imageDataUrl -> viewModel.send(text, imageDataUrl) },
         onRetry = viewModel::retryRecovery,
+        onTranscribeAudio = viewModel::transcribeMeetingAudio,
         onOpenSettings = onOpenSettings
     )
 }
@@ -100,16 +103,52 @@ fun ChatScreen(
     state: ChatUiState,
     onSend: (String, String?) -> Unit,
     onRetry: () -> Unit,
+    onTranscribeAudio: (ByteArray, String, (String) -> Unit, (String) -> Unit) -> Unit = { _, _, _, _ -> },
     onOpenSettings: () -> Unit = {}
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     var attachedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var attachedDataUrl by remember { mutableStateOf<String?>(null) }
+    var attachedAudioName by remember { mutableStateOf<String?>(null) }
+    var attachedAudioBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var isTranscribingAudio by remember { mutableStateOf(false) }
+    var audioTranscriptionError by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val promptEnricher = remember { MultimodalPromptEnricher(ImageCompressor()) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    // Activity launcher for Meeting Audio file picker
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val bytes = context.contentResolver.openInputStream(it)?.use { stream ->
+                        stream.readBytes()
+                    }
+                    var fileName = "meeting_recording.m4a"
+                    context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                        val colIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (colIdx >= 0 && cursor.moveToFirst()) {
+                            fileName = cursor.getString(colIdx) ?: fileName
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        attachedAudioBytes = bytes
+                        attachedAudioName = fileName
+                        audioTranscriptionError = null
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        audioTranscriptionError = "Failed to open audio: ${e.message}"
+                    }
+                }
+            }
+        }
+    }
 
     // Activity launcher for Gallery photo picker
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -326,11 +365,43 @@ fun ChatScreen(
                 draft = draft,
                 enabled = !state.isGenerating,
                 attachedBitmap = attachedBitmap,
+                attachedAudioName = attachedAudioName,
+                isTranscribingAudio = isTranscribingAudio,
+                audioTranscriptionError = audioTranscriptionError,
                 onRemoveAttachment = {
                     attachedBitmap = null
                     attachedDataUrl = null
                 },
                 onPickPhoto = { photoPickerLauncher.launch("image/*") },
+                onPickAudio = { audioPickerLauncher.launch("audio/*") },
+                onTranscribeAudio = {
+                    val bytes = attachedAudioBytes
+                    val name = attachedAudioName ?: "meeting.m4a"
+                    if (bytes != null) {
+                        isTranscribingAudio = true
+                        audioTranscriptionError = null
+                        onTranscribeAudio(
+                            bytes,
+                            name,
+                            { transcript ->
+                                isTranscribingAudio = false
+                                val prefix = if (draft.isNotBlank()) "$draft\n\n" else ""
+                                draft = "${prefix}Meeting Recording Transcription:\n\"\"\"\n$transcript\n\"\"\"\n\nPlease analyze and summarize this meeting with key decisions and action items."
+                                attachedAudioBytes = null
+                                attachedAudioName = null
+                            },
+                            { err ->
+                                isTranscribingAudio = false
+                                audioTranscriptionError = err
+                            }
+                        )
+                    }
+                },
+                onRemoveAudio = {
+                    attachedAudioBytes = null
+                    attachedAudioName = null
+                    audioTranscriptionError = null
+                },
                 onTakePhoto = { cameraLauncher.launch(null) },
                 onStartSpeechToText = {
                     val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -508,8 +579,14 @@ private fun MessageComposer(
     draft: String,
     enabled: Boolean,
     attachedBitmap: Bitmap?,
+    attachedAudioName: String? = null,
+    isTranscribingAudio: Boolean = false,
+    audioTranscriptionError: String? = null,
     onRemoveAttachment: () -> Unit,
     onPickPhoto: () -> Unit,
+    onPickAudio: () -> Unit = {},
+    onTranscribeAudio: () -> Unit = {},
+    onRemoveAudio: () -> Unit = {},
     onTakePhoto: () -> Unit,
     onStartSpeechToText: () -> Unit,
     onDraftChanged: (String) -> Unit,
@@ -565,6 +642,82 @@ private fun MessageComposer(
                 }
             }
 
+            // Attached Audio Meeting Recording Preview Bar
+            if (attachedAudioName != null) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🎙️", fontSize = 18.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = attachedAudioName,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Text(
+                                text = if (isTranscribingAudio) "Transcribing with Groq Whisper Large..." else "Groq Whisper Large v3 ready",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                        if (isTranscribingAudio) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        } else {
+                            Button(
+                                onClick = onTranscribeAudio,
+                                modifier = Modifier.height(32.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text("Transcribe", fontSize = 11.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(
+                            onClick = onRemoveAudio,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Remove audio",
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Audio Transcription Error Banner
+            if (audioTranscriptionError != null) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                ) {
+                    Text(
+                        text = audioTranscriptionError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+            }
+
             // Input Row with Action Icons & Send Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -582,6 +735,15 @@ private fun MessageComposer(
                         contentDescription = "Attach photo from gallery",
                         tint = MaterialTheme.colorScheme.primary
                     )
+                }
+
+                // Meeting Recording Audio Attachment Icon
+                IconButton(
+                    onClick = onPickAudio,
+                    enabled = enabled,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Text("🎙️", fontSize = 18.sp)
                 }
 
                 // Microphone / Speech-to-Text Icon

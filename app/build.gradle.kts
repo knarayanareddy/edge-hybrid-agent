@@ -26,6 +26,7 @@ val cloudModel = configurationValue(
 )
 val typesafeApiKey = configurationValue("EDGE_TYPESAFE_API_KEY")
 val geminiApiKey = configurationValue("EDGE_GEMINI_API_KEY")
+val groqApiKey = configurationValue("GROQ_API_KEY")
 val mcpEndpoint = configurationValue("EDGE_MCP_ENDPOINT")
 val mcpToken = configurationValue("EDGE_MCP_BEARER_TOKEN")
 val mcpEnabled = configurationValue(
@@ -51,6 +52,7 @@ android {
         buildConfigField("String", "CLOUD_MODEL", quoted(cloudModel))
         buildConfigField("String", "TYPESAFE_API_KEY", quoted(typesafeApiKey))
         buildConfigField("String", "GEMINI_API_KEY", quoted(geminiApiKey))
+        buildConfigField("String", "GROQ_API_KEY", quoted(groqApiKey))
         buildConfigField("String", "MCP_ENDPOINT", quoted(mcpEndpoint))
         buildConfigField("String", "MCP_BEARER_TOKEN", quoted(mcpToken))
         buildConfigField("boolean", "MCP_ENABLED", mcpEnabled.toString())

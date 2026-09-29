@@ -49,6 +49,13 @@ class SecureKeyStore @Inject constructor(
     }
     fun setGeminiApiKey(key: String) = prefs.edit().putString(KEY_GEMINI_API_KEY, key.trim()).apply()
 
+    fun getGroqApiKey(): String {
+        val saved = prefs.getString(KEY_GROQ_API_KEY, "") ?: ""
+        if (saved.isNotBlank()) return saved
+        return com.edgehybrid.agent.BuildConfig.GROQ_API_KEY.takeIf { it.isNotBlank() } ?: ""
+    }
+    fun setGroqApiKey(key: String) = prefs.edit().putString(KEY_GROQ_API_KEY, key.trim()).apply()
+
     fun getSelectedCloudModel(): String {
         val saved = prefs.getString(KEY_SELECTED_CLOUD_MODEL, "") ?: ""
         if (saved.isNotBlank()) return saved
@@ -80,6 +87,7 @@ class SecureKeyStore @Inject constructor(
         private const val KEY_OPENROUTER_API_KEY = "openrouter_api_key"
         private const val KEY_TYPESAFE_API_KEY = "typesafe_api_key"
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
+        private const val KEY_GROQ_API_KEY = "groq_api_key"
         private const val KEY_SELECTED_CLOUD_MODEL = "selected_cloud_model"
         private const val KEY_CUSTOM_ENDPOINT = "custom_endpoint"
         private const val KEY_ENABLE_LOCAL_FALLBACK = "enable_local_fallback"
