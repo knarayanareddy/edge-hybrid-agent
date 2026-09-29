@@ -109,14 +109,12 @@ class NativeActionHandler @Inject constructor(
 
     suspend fun launchCamera(): Boolean =
         withContext(Dispatchers.IO) {
-            val captureIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
-            if (launchExternalIntent(captureIntent)) {
+            val stillCameraIntent = Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
+            if (launchExternalIntent(stillCameraIntent)) {
                 true
             } else {
-                val cameraAppIntent = Intent(Intent.ACTION_MAIN).apply {
-                    addCategory(Intent.CATEGORY_APP_CAMERA)
-                }
-                launchExternalIntent(cameraAppIntent)
+                val captureIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+                launchExternalIntent(captureIntent)
             }
         }
 
