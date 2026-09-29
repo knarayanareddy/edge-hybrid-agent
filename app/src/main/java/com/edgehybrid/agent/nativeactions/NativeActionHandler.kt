@@ -1,15 +1,19 @@
 package com.edgehybrid.agent.nativeactions
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.provider.AlarmClock
 import android.provider.CalendarContract
+import androidx.core.content.ContextCompat
 import com.edgehybrid.agent.data.local.NoteDao
 import com.edgehybrid.agent.data.local.NoteEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -19,6 +23,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 @Singleton
@@ -161,6 +170,105 @@ class NativeActionHandler @Inject constructor(
         }
 
         return fallback
+    }
+
+    suspend fun queryUpcomingEvents(daysAhead: Int = 1): String = withContext(Dispatchers.IO) {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_CALENDAR
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasPermission) {
+            val errObj = JSONObject().apply {
+                put("permission_granted", false)
+                put("message", "READ_CALENDAR permission is not granted yet. Please allow calendar access in Android settings.")
+            }
+            return@withContext errObj.toString()
+        }
+
+        val beginTime = System.currentTimeMillis()
+        val endTime = beginTime + (daysAhead.coerceIn(1, 30) * 24 * 60 * 60 * 1000L)
+        val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
+        ContentUris.appendId(builder, beginTime)
+        ContentUris.appendId(builder, endTime)
+
+        val projection = arrayOf(
+            CalendarContract.Instances.EVENT_ID,
+            CalendarContract.Instances.TITLE,
+            CalendarContract.Instances.BEGIN,
+            CalendarContract.Instances.END,
+            CalendarContract.Instances.EVENT_LOCATION
+        )
+
+        val eventsArray = JSONArray()
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+
+        try {
+            val cursor = context.contentResolver.query(
+                builder.build(),
+                projection,
+                null,
+                null,
+                "${CalendarContract.Instances.BEGIN} ASC"
+            )
+
+            cursor?.use {
+                val titleCol = it.getColumnIndex(CalendarContract.Instances.TITLE)
+                val beginCol = it.getColumnIndex(CalendarContract.Instances.BEGIN)
+                val endCol = it.getColumnIndex(CalendarContract.Instances.END)
+                val locCol = it.getColumnIndex(CalendarContract.Instances.EVENT_LOCATION)
+
+                var count = 0
+                while (it.moveToNext() && count < 20) {
+                    val title = if (titleCol >= 0) it.getString(titleCol) ?: "Untitled Event" else "Untitled"
+                    val startMs = if (beginCol >= 0) it.getLong(beginCol) else 0L
+                    val endMs = if (endCol >= 0) it.getLong(endCol) else 0L
+                    val location = if (locCol >= 0) it.getString(locCol) ?: "" else ""
+
+                    val eventObj = JSONObject().apply {
+                        put("title", title)
+                        put("start", if (startMs > 0) dateFormat.format(Date(startMs)) else "Unknown")
+                        put("end", if (endMs > 0) dateFormat.format(Date(endMs)) else "Unknown")
+                        if (location.isNotBlank()) put("location", location)
+                    }
+                    eventsArray.put(eventObj)
+                    count++
+                }
+            }
+        } catch (e: Exception) {
+            val errObj = JSONObject().apply {
+                put("error", e.message ?: "Failed to read calendar database")
+            }
+            return@withContext errObj.toString()
+        }
+
+        val resultObj = JSONObject().apply {
+            put("days_ahead", daysAhead)
+            put("events_count", eventsArray.length())
+            put("events", eventsArray)
+            if (eventsArray.length() == 0) {
+                put("note", "No events scheduled in the next $daysAhead day(s)")
+            }
+        }
+        resultObj.toString()
+    }
+
+    suspend fun shareToTelegram(text: String): Boolean = withContext(Dispatchers.IO) {
+        val telegramIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            setPackage("org.telegram.messenger")
+        }
+
+        if (launchExternalIntent(telegramIntent)) {
+            true
+        } else {
+            val webIntent = Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://t.me/share/url?text=" + Uri.encode(text))
+            )
+            launchExternalIntent(webIntent)
+        }
     }
 
     private fun launchExternalIntent(intent: Intent): Boolean {

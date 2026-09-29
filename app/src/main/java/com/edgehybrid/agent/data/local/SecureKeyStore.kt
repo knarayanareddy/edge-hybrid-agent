@@ -56,6 +56,12 @@ class SecureKeyStore @Inject constructor(
     }
     fun setGroqApiKey(key: String) = prefs.edit().putString(KEY_GROQ_API_KEY, key.trim()).apply()
 
+    fun getTelegramBotToken(): String = prefs.getString(KEY_TELEGRAM_BOT_TOKEN, "") ?: ""
+    fun setTelegramBotToken(token: String) = prefs.edit().putString(KEY_TELEGRAM_BOT_TOKEN, token.trim()).apply()
+
+    fun getTelegramChatId(): String = prefs.getString(KEY_TELEGRAM_CHAT_ID, "") ?: ""
+    fun setTelegramChatId(chatId: String) = prefs.edit().putString(KEY_TELEGRAM_CHAT_ID, chatId.trim()).apply()
+
     fun getSelectedCloudModel(): String {
         val saved = prefs.getString(KEY_SELECTED_CLOUD_MODEL, "") ?: ""
         if (saved.isNotBlank()) return saved
@@ -88,6 +94,8 @@ class SecureKeyStore @Inject constructor(
         private const val KEY_TYPESAFE_API_KEY = "typesafe_api_key"
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
         private const val KEY_GROQ_API_KEY = "groq_api_key"
+        private const val KEY_TELEGRAM_BOT_TOKEN = "telegram_bot_token"
+        private const val KEY_TELEGRAM_CHAT_ID = "telegram_chat_id"
         private const val KEY_SELECTED_CLOUD_MODEL = "selected_cloud_model"
         private const val KEY_CUSTOM_ENDPOINT = "custom_endpoint"
         private const val KEY_ENABLE_LOCAL_FALLBACK = "enable_local_fallback"

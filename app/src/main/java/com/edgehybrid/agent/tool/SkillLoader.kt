@@ -9,6 +9,7 @@ import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import com.edgehybrid.agent.data.local.NoteDao
 import com.edgehybrid.agent.data.local.NoteEntity
+import com.edgehybrid.agent.data.local.SecureKeyStore
 import com.edgehybrid.agent.data.model.FunctionDefinition
 import com.edgehybrid.agent.data.model.ModelToolCall
 import com.edgehybrid.agent.data.model.ToolDefinition
@@ -18,7 +19,11 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.ZoneId
@@ -56,6 +61,7 @@ class BuiltInSkillLoader @Inject constructor(
     private val httpClient: HttpClient,
     private val nativeActionHandler: NativeActionHandler,
     private val noteDao: NoteDao,
+    private val keyStore: SecureKeyStore,
     @ApplicationContext private val context: Context
 ) : SkillLoader {
 
@@ -278,6 +284,75 @@ class BuiltInSkillLoader @Inject constructor(
                         put("additionalProperties", false)
                     }
                 )
+            ),
+            // 12. Create Calendar Event
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = CREATE_CALENDAR_EVENT_TOOL_NAME,
+                    description = "Schedule or add a new event or meeting to Google Calendar on the device.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("title", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Title or subject of the meeting/event.")
+                            })
+                            put("description", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Optional notes, agenda, or description for the event.")
+                            })
+                            put("location", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Optional event location or meeting room.")
+                            })
+                            put("duration_minutes", buildJsonObject {
+                                put("type", "integer")
+                                put("description", "Duration in minutes (defaults to 60).")
+                            })
+                        })
+                        put("required", buildJsonArray { add("title") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 13. Query Calendar Events
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = QUERY_CALENDAR_EVENTS_TOOL_NAME,
+                    description = "Query upcoming events, meetings, and appointments from Google Calendar on the device.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("days_ahead", buildJsonObject {
+                                put("type", "integer")
+                                put("description", "Number of days ahead to search (default 1 for today, 7 for this week).")
+                            })
+                        })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 14. Telegram Messaging
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = SEND_TELEGRAM_MESSAGE_TOOL_NAME,
+                    description = "Send a message, note, meeting summary, or alert to Telegram. Dispatches via Telegram Bot API or opens Telegram directly.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("message", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Text message or summary to send.")
+                            })
+                            put("chat_id", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Optional Telegram chat ID or channel username.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("message") })
+                        put("additionalProperties", false)
+                    }
+                )
             )
         )
 
@@ -295,6 +370,9 @@ class BuiltInSkillLoader @Inject constructor(
                 TIMER_TOOL_NAME -> executeTimer(call.function.arguments)
                 CREATE_NOTE_TOOL_NAME -> executeCreateNote(call.function.arguments)
                 LIST_NOTES_TOOL_NAME -> executeListNotes()
+                CREATE_CALENDAR_EVENT_TOOL_NAME -> executeCreateCalendarEvent(call.function.arguments)
+                QUERY_CALENDAR_EVENTS_TOOL_NAME -> executeQueryCalendarEvents(call.function.arguments)
+                SEND_TELEGRAM_MESSAGE_TOOL_NAME -> executeTelegramMessage(call.function.arguments)
                 else -> throw SkillExecutionException("Unsupported skill: ${call.function.name}")
             }
         } catch (e: Exception) {
@@ -695,6 +773,83 @@ class BuiltInSkillLoader @Inject constructor(
         return parseExpression()
     }
 
+    // 12. Create Calendar Event
+    private suspend fun executeCreateCalendarEvent(arguments: JsonObject): ToolExecutionOutcome {
+        val title = arguments["title"]?.jsonPrimitive?.content?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: throw SkillExecutionException("Calendar event title is required")
+        val description = arguments["description"]?.jsonPrimitive?.content?.trim()
+        val location = arguments["location"]?.jsonPrimitive?.content?.trim()
+        val durationMinutes = arguments["duration_minutes"]?.jsonPrimitive?.intOrNull ?: 60
+
+        val startTime = System.currentTimeMillis() + 3600_000L
+        val endTime = startTime + (durationMinutes * 60_000L)
+
+        val success = nativeActionHandler.createCalendarEvent(
+            title = title,
+            startTime = startTime,
+            endTime = endTime,
+            description = description,
+            location = location
+        )
+
+        val result = buildJsonObject {
+            put("title", title)
+            put("event_created", success)
+            put("status", if (success) "Google Calendar event editor opened on device" else "Failed to launch Google Calendar")
+        }
+        return ToolExecutionOutcome(result.toString(), !success)
+    }
+
+    // 13. Query Calendar Events
+    private suspend fun executeQueryCalendarEvents(arguments: JsonObject): ToolExecutionOutcome {
+        val daysAhead = arguments["days_ahead"]?.jsonPrimitive?.intOrNull ?: 1
+        val outcomeJson = nativeActionHandler.queryUpcomingEvents(daysAhead)
+        return ToolExecutionOutcome(outcomeJson, false)
+    }
+
+    // 14. Telegram Messaging
+    private suspend fun executeTelegramMessage(arguments: JsonObject): ToolExecutionOutcome {
+        val message = arguments["message"]?.jsonPrimitive?.content?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: throw SkillExecutionException("Telegram message content is required")
+        val explicitChatId = arguments["chat_id"]?.jsonPrimitive?.content?.trim()
+            ?.takeIf(String::isNotEmpty)
+
+        val botToken = keyStore.getTelegramBotToken().trim()
+        val chatId = explicitChatId ?: keyStore.getTelegramChatId().trim()
+
+        if (botToken.isNotBlank() && chatId.isNotBlank()) {
+            val url = "https://api.telegram.org/bot$botToken/sendMessage"
+            val response = httpClient.post(url) {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject {
+                    put("chat_id", chatId)
+                    put("text", message)
+                }.toString())
+            }
+            val isSuccess = response.status.value in 200..299
+            val result = buildJsonObject {
+                put("sent_via", "telegram_bot_api")
+                put("chat_id", chatId)
+                put("http_status", response.status.value)
+                put("status", if (isSuccess) "Message delivered to Telegram" else "Telegram API returned error code ${response.status.value}")
+            }
+            return ToolExecutionOutcome(result.toString(), !isSuccess)
+        } else {
+            val launched = nativeActionHandler.shareToTelegram(message)
+            val result = buildJsonObject {
+                put("sent_via", "android_telegram_intent")
+                put("opened_telegram_app", launched)
+                put("status", if (launched) "Telegram app opened with message ready to send" else "Could not open Telegram")
+                if (botToken.isBlank()) {
+                    put("tip", "To send messages in the background automatically, enter a Telegram Bot Token in Settings.")
+                }
+            }
+            return ToolExecutionOutcome(result.toString(), !launched)
+        }
+    }
+
     companion object {
         const val WEATHER_TOOL_NAME = "get_current_weather"
         const val CONVERSION_TOOL_NAME = "convert_temperature"
@@ -707,5 +862,8 @@ class BuiltInSkillLoader @Inject constructor(
         const val TIMER_TOOL_NAME = "set_timer"
         const val CREATE_NOTE_TOOL_NAME = "create_quick_note"
         const val LIST_NOTES_TOOL_NAME = "list_quick_notes"
+        const val CREATE_CALENDAR_EVENT_TOOL_NAME = "create_calendar_event"
+        const val QUERY_CALENDAR_EVENTS_TOOL_NAME = "query_calendar_events"
+        const val SEND_TELEGRAM_MESSAGE_TOOL_NAME = "send_telegram_message"
     }
 }

@@ -10,9 +10,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Native Device Tools (Flashlight, Alarms, Battery Management, Audio) -->
+    <!-- Native Device Tools (Flashlight, Alarms, Battery Management, Audio, Calendar) -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
@@ -36,6 +38,12 @@
         <intent>
             <action android:name="android.intent.action.SET_TIMER" />
         </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <package android:name="org.telegram.messenger" />
+        <package android:name="com.google.android.calendar" />
     </queries>
 
     <application

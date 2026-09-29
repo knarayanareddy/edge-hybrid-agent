@@ -34,6 +34,8 @@ fun SettingsScreen(
     var typeSafeKey by remember { mutableStateOf(keyStore.getTypeSafeApiKey()) }
     var geminiKey by remember { mutableStateOf(keyStore.getGeminiApiKey()) }
     var groqKey by remember { mutableStateOf(keyStore.getGroqApiKey()) }
+    var telegramBotToken by remember { mutableStateOf(keyStore.getTelegramBotToken()) }
+    var telegramChatId by remember { mutableStateOf(keyStore.getTelegramChatId()) }
     var selectedModel by remember { mutableStateOf(keyStore.getSelectedCloudModel()) }
     var jevEnabled by remember { mutableStateOf(keyStore.isJevRoutingEnabled()) }
     var localFallbackEnabled by remember { mutableStateOf(keyStore.isLocalFallbackEnabled()) }
@@ -130,6 +132,44 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text(
+                    text = "External Integrations",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Telegram bot messaging and meeting notes dispatch",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = telegramBotToken,
+                    onValueChange = { telegramBotToken = it },
+                    label = { Text("Telegram Bot Token (Optional)") },
+                    placeholder = { Text("123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    supportingText = { Text("Create via @BotFather on Telegram to send direct bot messages") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = telegramChatId,
+                    onValueChange = { telegramChatId = it },
+                    label = { Text("Telegram Default Chat ID (Optional)") },
+                    placeholder = { Text("e.g. 987654321 or @yourchannel") },
+                    supportingText = { Text("Your user ID or channel where the agent should send summaries") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text(
                     text = "Inference & Routing",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
@@ -180,6 +220,8 @@ fun SettingsScreen(
                         keyStore.setTypeSafeApiKey(typeSafeKey)
                         keyStore.setGeminiApiKey(geminiKey)
                         keyStore.setGroqApiKey(groqKey)
+                        keyStore.setTelegramBotToken(telegramBotToken)
+                        keyStore.setTelegramChatId(telegramChatId)
                         keyStore.setSelectedCloudModel(selectedModel)
                         keyStore.setJevRoutingEnabled(jevEnabled)
                         keyStore.setLocalFallbackEnabled(localFallbackEnabled)
