@@ -4,6 +4,8 @@ import android.content.Context
 import com.edgehybrid.agent.data.local.ChatDao
 import com.edgehybrid.agent.data.local.ChatDatabase
 import com.edgehybrid.agent.data.local.LessonsDao
+import com.edgehybrid.agent.data.local.NoteDao
+import com.edgehybrid.agent.data.local.VectorDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -29,5 +31,15 @@ object DatabaseModule {
     @Provides
     fun provideLessonsDao(database: ChatDatabase): LessonsDao {
         return database.lessonsDao()
+    }
+
+    @Provides
+    fun provideNoteDao(database: ChatDatabase): NoteDao {
+        return database.noteDao()
+    }
+
+    @Provides
+    fun provideVectorDao(database: ChatDatabase): VectorDao {
+        return database.vectorDao()
     }
 }

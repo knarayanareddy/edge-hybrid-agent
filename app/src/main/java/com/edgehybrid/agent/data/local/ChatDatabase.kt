@@ -9,7 +9,9 @@ import androidx.room.RoomDatabase
     entities = [
         ChatSessionEntity::class,
         ChatMessageEntity::class,
-        LessonEntity::class
+        LessonEntity::class,
+        NoteEntity::class,
+        VectorChunkEntity::class
     ],
     version = 1,
     exportSchema = false
@@ -17,6 +19,8 @@ import androidx.room.RoomDatabase
 abstract class ChatDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
     abstract fun lessonsDao(): LessonsDao
+    abstract fun noteDao(): NoteDao
+    abstract fun vectorDao(): VectorDao
 
     companion object {
         private const val DB_NAME = "edge_hybrid_agent.db"
