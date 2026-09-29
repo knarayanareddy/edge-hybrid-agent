@@ -29,10 +29,12 @@ class NativeActionHandlerTest {
 
         override fun getAllNotes() = flowOf(notes.toList())
 
-        override suspend fun getNoteById(id: Long): NoteEntity? = notes.find { it.id == id }
+        override suspend fun getRecentNotes(limit: Int): List<NoteEntity> =
+            notes.takeLast(limit)
 
-        override suspend fun deleteNote(id: Long) {
-            notes.removeIf { it.id == id }
+        override suspend fun deleteNote(note: NoteEntity): Int {
+            val removed = notes.removeIf { it.id == note.id }
+            return if (removed) 1 else 0
         }
     }
 

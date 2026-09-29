@@ -68,9 +68,28 @@ class NewFeaturesIntegrationTest {
 
     private class SimpleEchoAgentLoop : AgentLoop {
         override fun streamChat(history: List<ChatMessage>): Flow<AgentStreamEvent> = flow {
-            emit(AgentStreamEvent.AssistantDelta("Echo: " + (history.lastOrNull()?.content ?: "")))
-            emit(AgentStreamEvent.Complete(history.lastOrNull()?.content ?: "", null, null))
+            val text = history.lastOrNull()?.content ?: ""
+            emit(AgentStreamEvent.AssistantDelta("Echo: $text"))
+            emit(
+                AgentStreamEvent.Completed(
+                    finalText = "Echo: $text",
+                    usage = com.edgehybrid.agent.agent.TokenUsage(
+                        promptTokens = 1,
+                        completionTokens = 1,
+                        providerReported = false
+                    ),
+                    telemetry = com.edgehybrid.agent.agent.GenerationTelemetry(
+                        timeToFirstTokenMs = null,
+                        totalGenerationTimeMs = 0
+                    )
+                )
+            )
         }
+
+        override fun continueAfterDisconnect(
+            history: List<ChatMessage>,
+            partialText: String
+        ): Flow<AgentStreamEvent> = streamChat(history)
     }
 
     @Test
