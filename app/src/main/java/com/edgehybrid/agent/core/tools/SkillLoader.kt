@@ -27,6 +27,66 @@ class SkillLoader @Inject constructor() {
     private val json = Json { ignoreUnknownKeys = true }
     private val activeSkills = mutableMapOf<String, LoadedSkill>()
 
+    init {
+        registerBuiltInSkills()
+    }
+
+    private fun registerBuiltInSkills() {
+        val dummyDir = File("")
+        val builtIn = listOf(
+            LoadedSkill(
+                name = "Weather & Forecast Intelligence",
+                description = "Real-time global weather conditions, forecasts, and temperatures via Open-Meteo",
+                instructions = "Query real-time meteorological forecasts and convert temperatures.",
+                tools = emptyList(),
+                skillDir = dummyDir
+            ),
+            LoadedSkill(
+                name = "Wikipedia Knowledge Engine",
+                description = "Live encyclopedia lookups for companies (e.g. Achmea), entities, science, and history",
+                instructions = "Search Wikipedia API for instant entity summaries and descriptions.",
+                tools = emptyList(),
+                skillDir = dummyDir
+            ),
+            LoadedSkill(
+                name = "Currency & Financial Exchange",
+                description = "Live global currency conversions (EUR, USD, GBP, JPY, INR, CAD) using open exchange rates",
+                instructions = "Convert monetary amounts between international currency codes.",
+                tools = emptyList(),
+                skillDir = dummyDir
+            ),
+            LoadedSkill(
+                name = "Scientific Math Evaluator",
+                description = "High-precision calculations, percentages, square roots, powers, and trigonometry",
+                instructions = "Evaluate algebraic and scientific expressions.",
+                tools = emptyList(),
+                skillDir = dummyDir
+            ),
+            LoadedSkill(
+                name = "World Clock & Timezone",
+                description = "Current local time, date, and UTC offsets across global cities",
+                instructions = "Look up time in Amsterdam, Tokyo, New York, London, and international timezones.",
+                tools = emptyList(),
+                skillDir = dummyDir
+            ),
+            LoadedSkill(
+                name = "Device Hardware & Diagnostics",
+                description = "Battery telemetry, RAM diagnostics, network connection types, and flashlight control",
+                instructions = "Inspect battery levels, available memory, and toggle camera flashlight.",
+                tools = emptyList(),
+                skillDir = dummyDir
+            ),
+            LoadedSkill(
+                name = "Notes & Timers",
+                description = "Secure on-device SQLite note management and native Android countdown alarms",
+                instructions = "Create notes, read saved notes, and schedule system timers.",
+                tools = emptyList(),
+                skillDir = dummyDir
+            )
+        )
+        builtIn.forEach { activeSkills[it.name] = it }
+    }
+
     fun getActiveSkills(): List<LoadedSkill> = activeSkills.values.toList()
 
     fun getAllToolDefinitions(): List<ToolDefinition> {

@@ -16,6 +16,9 @@ interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY timestamp DESC")
     fun getAllNotes(): Flow<List<NoteEntity>>
 
+    @Query("SELECT * FROM notes ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentNotes(limit: Int = 10): List<NoteEntity>
+
     @Delete
     suspend fun deleteNote(note: NoteEntity): Int
 }

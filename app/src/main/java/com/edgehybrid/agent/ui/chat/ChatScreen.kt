@@ -161,15 +161,37 @@ fun ChatScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        SuggestionChip(
-                            onClick = { onSend("What is the weather in Tokyo right now?") },
-                            label = { Text("⛅ Check weather in Tokyo") }
-                        )
-                        SuggestionChip(
-                            onClick = { onSend("Convert 100 Fahrenheit to Celsius") },
-                            label = { Text("🌡️ Convert temperature") }
-                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SuggestionChip(
+                                onClick = { onSend("What is the weather in Amsterdam?") },
+                                label = { Text("⛅ Weather in Amsterdam") }
+                            )
+                            SuggestionChip(
+                                onClick = { onSend("Search Wikipedia for Achmea") },
+                                label = { Text("📖 Wikipedia Achmea") }
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SuggestionChip(
+                                onClick = { onSend("Convert 100 USD to EUR") },
+                                label = { Text("💶 100 USD to EUR") }
+                            )
+                            SuggestionChip(
+                                onClick = { onSend("Calculate sqrt(144) * 8.5 + 25") },
+                                label = { Text("🧮 Math calculation") }
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SuggestionChip(
+                                onClick = { onSend("What time is it in Tokyo?") },
+                                label = { Text("🕒 Time in Tokyo") }
+                            )
+                            SuggestionChip(
+                                onClick = { onSend("Check device battery and memory status") },
+                                label = { Text("🔋 Device status") }
+                            )
+                        }
                         SuggestionChip(
                             onClick = { onSend("Toggle the flashlight") },
                             label = { Text("🔦 Toggle flashlight") }
