@@ -80,8 +80,8 @@ class BuiltInSkillLoader @Inject constructor(
         val actionTemplate: String
     )
 
-    override suspend fun listTools(): List<ToolDefinition> =
-        listOf(
+    override suspend fun listTools(): List<ToolDefinition> {
+        val baseTools = listOf(
             // 1. Weather
             ToolDefinition(
                 function = FunctionDefinition(
