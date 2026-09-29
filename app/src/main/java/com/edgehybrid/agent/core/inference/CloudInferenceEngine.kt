@@ -1,7 +1,7 @@
 package com.edgehybrid.agent.core.inference
 
 import io.ktor.client.*
-import io.ktor.client.engine.okhttp.*
+import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
@@ -42,17 +42,12 @@ class CloudInferenceEngine(
         isLenient = true
     }
 
-    private val client = HttpClient(OkHttp) {
+    private val client = HttpClient(CIO) {
         install(ContentNegotiation) { json(this@CloudInferenceEngine.json) }
         install(HttpTimeout) {
             requestTimeoutMillis = 120_000
             connectTimeoutMillis = 10_000
             socketTimeoutMillis = 120_000
-        }
-        engine {
-            config {
-                retryOnConnectionFailure(true)
-            }
         }
     }
 

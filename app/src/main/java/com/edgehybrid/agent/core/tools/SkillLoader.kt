@@ -1,8 +1,7 @@
 package com.edgehybrid.agent.core.tools
 
 import com.edgehybrid.agent.core.inference.ToolDefinition
-import com.edgehybrid.agent.core.inference.ToolParameterProperty
-import com.edgehybrid.agent.core.inference.ToolParameters
+import com.edgehybrid.agent.core.inference.ToolFunction
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -72,16 +71,19 @@ class SkillLoader @Inject constructor() {
 
         // Generate default tool definition for this skill
         val skillTool = ToolDefinition(
-            name = "skill_${name.replace("-", "_")}",
-            description = description.ifEmpty { "Executes the $name skill workflow" },
-            parameters = ToolParameters(
-                properties = mapOf(
-                    "input" to ToolParameterProperty(
-                        type = "string",
-                        description = "Arguments or context needed by the skill"
-                    )
-                ),
-                required = listOf("input")
+            function = ToolFunction(
+                name = "skill_${name.replace("-", "_")}",
+                description = description.ifEmpty { "Executes the $name skill workflow" },
+                parameters = mapOf(
+                    "type" to "object",
+                    "properties" to mapOf(
+                        "input" to mapOf(
+                            "type" to "string",
+                            "description" to "Arguments or context needed by the skill"
+                        )
+                    ),
+                    "required" to listOf("input")
+                )
             )
         )
 
@@ -117,7 +119,7 @@ class SkillLoader @Inject constructor() {
      */
     suspend fun executeTool(toolName: String, argumentsJson: String): String {
         val skill = activeSkills.values.firstOrNull { s ->
-            s.tools.any { it.name == toolName }
+            s.tools.any { it.function.name == toolName }
         } ?: return "Error: Tool '$toolName' is not registered."
 
         return "Executed skill '${skill.name}' with input: $argumentsJson. (Local Android Execution)"

@@ -27,6 +27,7 @@ class NativeActionHandler @Inject constructor(
     private val noteDao: NoteDao
 ) {
     private val flashlightMutex = Mutex()
+    private var isTorchOn: Boolean = false
 
     suspend fun createCalendarEvent(
         title: String,
@@ -117,8 +118,9 @@ class NativeActionHandler @Inject constructor(
                     if (cameraId == null) {
                         false
                     } else {
-                        val enabled = !cameraManager.getTorchMode(cameraId)
+                        val enabled = !isTorchOn
                         cameraManager.setTorchMode(cameraId, enabled)
+                        isTorchOn = enabled
                         enabled
                     }
                 } catch (_: CameraAccessException) {

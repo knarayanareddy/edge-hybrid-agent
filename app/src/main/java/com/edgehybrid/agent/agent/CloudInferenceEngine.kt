@@ -20,7 +20,6 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.request.preparePost
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
-import io.ktor.client.statement.execute
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
@@ -285,10 +284,10 @@ class CloudInferenceEngine @Inject constructor(
     }
 }
 
-private data class RetryableProviderStatus(
+private class RetryableProviderStatus(
     val statusCode: Int,
     val delayMs: Long
-)
+) : Throwable()
 
 private class TurnAccumulator(
     private val clock: MonotonicClock,
@@ -471,7 +470,7 @@ private class PartialToolCall {
             JsonObject(emptyMap())
         } else {
             try {
-                json.parseArguments(arguments.toString())
+                Json.decodeFromString<JsonObject>(arguments.toString())
             } catch (exception: Exception) {
                 throw ProviderProtocolException(
                     "Tool call $callId contains invalid JSON arguments",
@@ -489,9 +488,6 @@ private class PartialToolCall {
             )
         )
     }
-
-    private fun kotlinx.serialization.json.Json.parseArguments(value: String): JsonObject =
-        decodeFromString<JsonObject>(value)
 }
 
 @Serializable

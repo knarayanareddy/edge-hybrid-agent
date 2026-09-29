@@ -5,7 +5,6 @@ import com.edgehybrid.agent.data.model.ModelToolCall
 import com.edgehybrid.agent.data.model.ToolDefinition
 import com.edgehybrid.agent.network.SseFrameDecoder
 import io.ktor.client.HttpClient
-import io.ktor.client.request.contentType
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
