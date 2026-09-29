@@ -47,6 +47,7 @@ class GroqWhisperService @Inject constructor() {
                 connectTimeout = 45_000
                 readTimeout = 120_000
                 setRequestProperty("Authorization", "Bearer $apiKey")
+                setRequestProperty("User-Agent", "EdgeHybridAgent/1.0 (Android; Samsung Galaxy S23 Ultra)")
                 setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
             }
 
