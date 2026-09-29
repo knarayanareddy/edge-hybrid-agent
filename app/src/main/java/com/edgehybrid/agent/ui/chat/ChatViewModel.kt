@@ -28,6 +28,7 @@ data class ChatMessageUi(
     val id: String,
     val role: ChatMessageRole,
     val content: String,
+    val imageDataUrl: String? = null,
     val deliveryState: MessageDeliveryState,
     val toolActivities: List<ToolActivityUi> = emptyList(),
     val recoveryMessage: String? = null
@@ -68,9 +69,9 @@ class ChatViewModel @Inject constructor(
     private var generationJob: Job? = null
     private var pendingRetry: PendingRetry? = null
 
-    fun send(userText: String) {
+    fun send(userText: String, imageDataUrl: String? = null) {
         val normalizedText = userText.trim()
-        if (normalizedText.isEmpty() || mutableUiState.value.isGenerating) {
+        if ((normalizedText.isEmpty() && imageDataUrl == null) || mutableUiState.value.isGenerating) {
             return
         }
 
@@ -83,11 +84,13 @@ class ChatViewModel @Inject constructor(
             id = UUID.randomUUID().toString(),
             role = ChatMessageRole.USER,
             content = normalizedText,
+            imageDataUrl = imageDataUrl,
             deliveryState = MessageDeliveryState.COMPLETE
         )
         history += ChatMessage(
             role = ChatRoles.USER,
-            content = normalizedText
+            content = normalizedText,
+            imageDataUrl = imageDataUrl
         )
 
         mutableUiState.update { state ->
@@ -335,14 +338,15 @@ class ChatViewModel @Inject constructor(
 }
 
 private fun ChatMessageUi.toHistoryMessage(): ChatMessage? {
-    if (content.isBlank()) {
+    if (content.isBlank() && imageDataUrl == null) {
         return null
     }
 
     return when (role) {
         ChatMessageRole.USER -> ChatMessage(
             role = ChatRoles.USER,
-            content = content
+            content = content,
+            imageDataUrl = imageDataUrl
         )
 
         ChatMessageRole.ASSISTANT -> ChatMessage(

@@ -16,6 +16,7 @@ data class ChatMessage(
     val role: String,
     val content: String? = null,
     val name: String? = null,
+    val imageDataUrl: String? = null,
     @SerialName("tool_calls")
     val toolCalls: List<ModelToolCall>? = null,
     @SerialName("tool_call_id")
@@ -51,7 +52,7 @@ data class FunctionDefinition(
 @Serializable
 internal data class ApiChatMessage(
     val role: String,
-    val content: String? = null,
+    val content: kotlinx.serialization.json.JsonElement? = null,
     val name: String? = null,
     @SerialName("tool_calls")
     val toolCalls: List<ApiToolCall>? = null,
@@ -72,10 +73,27 @@ internal data class ApiToolCallFunction(
     val arguments: String
 )
 
-internal fun ChatMessage.toApiMessage(): ApiChatMessage =
-    ApiChatMessage(
+internal fun ChatMessage.toApiMessage(): ApiChatMessage {
+    val serializedContent: kotlinx.serialization.json.JsonElement? = when {
+        imageDataUrl != null -> kotlinx.serialization.json.buildJsonArray {
+            add(kotlinx.serialization.json.buildJsonObject {
+                put("type", "text")
+                put("text", content ?: "")
+            })
+            add(kotlinx.serialization.json.buildJsonObject {
+                put("type", "image_url")
+                put("image_url", kotlinx.serialization.json.buildJsonObject {
+                    put("url", imageDataUrl)
+                })
+            })
+        }
+        content != null -> kotlinx.serialization.json.JsonPrimitive(content)
+        else -> null
+    }
+
+    return ApiChatMessage(
         role = role,
-        content = content,
+        content = serializedContent,
         name = name,
         toolCalls = toolCalls?.map { call ->
             ApiToolCall(
@@ -89,6 +107,7 @@ internal fun ChatMessage.toApiMessage(): ApiChatMessage =
         },
         toolCallId = toolCallId
     )
+}
 
 @Serializable
 internal data class ChatCompletionRequest(

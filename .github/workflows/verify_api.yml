@@ -219,12 +219,20 @@ jobs:
               "Only call a tool when specifically needed."
           )
 
-          def send_query(prompt, expected_tool=None):
+          def send_query(prompt, expected_tool=None, image_data_url=None):
+              if image_data_url:
+                  user_content = [
+                      {"type": "text", "text": prompt},
+                      {"type": "image_url", "image_url": {"url": image_data_url}}
+                  ]
+              else:
+                  user_content = prompt
+
               payload = {
                   "model": model,
                   "messages": [
                       {"role": "system", "content": system_instruction},
-                      {"role": "user", "content": prompt}
+                      {"role": "user", "content": user_content}
                   ],
                   "tools": tools,
                   "tool_choice": "auto",
@@ -258,21 +266,22 @@ jobs:
                       return ("answer", None, msg.get("content"))
 
           test_cases = [
-              ("Tell me about Achmea in Amsterdam", "General Q&A about Dutch insurance company", None),
-              ("What's the weather in Amsterdam right now?", "Live weather check", "get_current_weather"),
-              ("Convert 150 EUR to USD", "Currency conversion", "convert_currency"),
-              ("Search Wikipedia for ASML semiconductor", "Wikipedia deep dive", "search_wikipedia"),
-              ("Calculate sqrt(144) * 8.5 + 25", "Math evaluator", "calculate_math"),
-              ("What time is it in Tokyo right now?", "World time lookup", "get_world_time"),
-              ("Can you toggle my flashlight?", "Native hardware action", "toggle_flashlight"),
-              ("Set a timer for 10 minutes for cooking pasta", "Native timer creation", "set_timer"),
+              ("Tell me about Achmea in Amsterdam", "General Q&A about Dutch insurance company", None, None),
+              ("What's the weather in Amsterdam right now?", "Live weather check", "get_current_weather", None),
+              ("Convert 150 EUR to USD", "Currency conversion", "convert_currency", None),
+              ("Search Wikipedia for ASML semiconductor", "Wikipedia deep dive", "search_wikipedia", None),
+              ("Calculate sqrt(144) * 8.5 + 25", "Math evaluator", "calculate_math", None),
+              ("What time is it in Tokyo right now?", "World time lookup", "get_world_time", None),
+              ("Can you toggle my flashlight?", "Native hardware action", "toggle_flashlight", None),
+              ("Set a timer for 10 minutes for cooking pasta", "Native timer creation", "set_timer", None),
+              ("What color is this square?", "Multimodal Vision (Red Pixel)", None, "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
           ]
 
-          print("\n🧪 EXECUTING MULTI-TOOL VERIFICATION SUITE:")
-          for i, (prompt, desc, expected_tool) in enumerate(test_cases, 1):
+          print("\n🧪 EXECUTING MULTI-TOOL & MULTIMODAL VERIFICATION SUITE:")
+          for i, (prompt, desc, expected_tool, img_url) in enumerate(test_cases, 1):
               print(f"\n[{i}/{len(test_cases)}] Testing: '{prompt}' ({desc})")
               try:
-                  res_type, tool_name, content = send_query(prompt, expected_tool)
+                  res_type, tool_name, content = send_query(prompt, expected_tool, img_url)
                   print("   ✅ Passed (HTTP 200 OK)")
               except urllib.error.HTTPError as e:
                   err = e.read().decode("utf-8")
@@ -280,5 +289,5 @@ jobs:
                   sys.exit(1)
 
           print("\n" + "=" * 70)
-          print("🎉 ALL 8 E2E SKILL & TOOL TESTS COMPLETED & VERIFIED 100% SUCCESSFULLY!")
+          print("🎉 ALL 9 E2E MULTI-TOOL & VISION TESTS COMPLETED & VERIFIED 100% SUCCESSFULLY!")
           EOF

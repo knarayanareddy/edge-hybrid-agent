@@ -1,5 +1,18 @@
 package com.edgehybrid.agent.ui.chat
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.os.Build
+import android.provider.MediaStore
+import android.speech.RecognizerIntent
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,25 +21,35 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -34,24 +57,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.SuggestionChip
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.edgehybrid.agent.R
+import com.edgehybrid.agent.hardware.vision.ImageCompressor
+import com.edgehybrid.agent.hardware.vision.MultimodalPromptEnricher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ChatRoute(
@@ -61,7 +88,7 @@ fun ChatRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     ChatScreen(
         state = state,
-        onSend = viewModel::send,
+        onSend = { text, imageDataUrl -> viewModel.send(text, imageDataUrl) },
         onRetry = viewModel::retryRecovery,
         onOpenSettings = onOpenSettings
     )
@@ -71,12 +98,70 @@ fun ChatRoute(
 @Composable
 fun ChatScreen(
     state: ChatUiState,
-    onSend: (String) -> Unit,
+    onSend: (String, String?) -> Unit,
     onRetry: () -> Unit,
     onOpenSettings: () -> Unit = {}
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
+    var attachedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var attachedDataUrl by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val promptEnricher = remember { MultimodalPromptEnricher(ImageCompressor()) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    // Activity launcher for Gallery photo picker
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, it))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaStore.Images.Media.getBitmap(context.contentResolver, it)
+                    }
+                    val dataUrl = promptEnricher.createVisionDataUrl(bitmap)
+                    withContext(Dispatchers.Main) {
+                        attachedBitmap = bitmap
+                        attachedDataUrl = dataUrl
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    // Activity launcher for Camera photo capture
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        bitmap?.let {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val dataUrl = promptEnricher.createVisionDataUrl(it)
+                    withContext(Dispatchers.Main) {
+                        attachedBitmap = it
+                        attachedDataUrl = dataUrl
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    // Activity launcher for Speech-to-Text
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!spoken.isNullOrBlank()) {
+                draft = if (draft.isBlank()) spoken else "$draft $spoken"
+            }
+        }
+    }
 
     val lastMessageSignature = state.messages.lastOrNull()?.let { message ->
         "${message.id}:${message.content.length}:${message.deliveryState}:${message.recoveryMessage}"
@@ -99,7 +184,7 @@ fun ChatScreen(
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "OpenRouter • Gemini 2.5 Flash",
+                            text = "Multimodal Vision • Voice • 11 Tools",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -135,7 +220,7 @@ fun ChatScreen(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Surface(
                             shape = MaterialTheme.shapes.extraLarge,
@@ -157,44 +242,44 @@ fun ChatScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "On-device security • Cloud reasoning • Native tools",
+                            text = "Multimodal Vision • On-Device Security • Live Tools",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SuggestionChip(
-                                onClick = { onSend("What is the weather in Amsterdam?") },
-                                label = { Text("⛅ Weather in Amsterdam") }
+                                onClick = { onSend("What is the weather in Amsterdam?", null) },
+                                label = { Text("⛅ Weather") }
                             )
                             SuggestionChip(
-                                onClick = { onSend("Search Wikipedia for Achmea") },
+                                onClick = { onSend("Search Wikipedia for Achmea in Amsterdam", null) },
                                 label = { Text("📖 Wikipedia Achmea") }
                             )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SuggestionChip(
-                                onClick = { onSend("Convert 100 USD to EUR") },
+                                onClick = { onSend("Convert 100 USD to EUR", null) },
                                 label = { Text("💶 100 USD to EUR") }
                             )
                             SuggestionChip(
-                                onClick = { onSend("Calculate sqrt(144) * 8.5 + 25") },
-                                label = { Text("🧮 Math calculation") }
+                                onClick = { onSend("Calculate sqrt(144) * 8.5 + 25", null) },
+                                label = { Text("🧮 Math") }
                             )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SuggestionChip(
-                                onClick = { onSend("What time is it in Tokyo?") },
-                                label = { Text("🕒 Time in Tokyo") }
+                                onClick = { onSend("What time is it in Tokyo?", null) },
+                                label = { Text("🕒 Tokyo Time") }
                             )
                             SuggestionChip(
-                                onClick = { onSend("Check device battery and memory status") },
-                                label = { Text("🔋 Device status") }
+                                onClick = { onSend("Check device battery and memory status", null) },
+                                label = { Text("🔋 Battery & RAM") }
                             )
                         }
                         SuggestionChip(
-                            onClick = { onSend("Toggle the flashlight") },
-                            label = { Text("🔦 Toggle flashlight") }
+                            onClick = { onSend("Toggle the flashlight", null) },
+                            label = { Text("🔦 Toggle Flashlight") }
                         )
                     }
                 }
@@ -240,11 +325,34 @@ fun ChatScreen(
             MessageComposer(
                 draft = draft,
                 enabled = !state.isGenerating,
+                attachedBitmap = attachedBitmap,
+                onRemoveAttachment = {
+                    attachedBitmap = null
+                    attachedDataUrl = null
+                },
+                onPickPhoto = { photoPickerLauncher.launch("image/*") },
+                onTakePhoto = { cameraLauncher.launch(null) },
+                onStartSpeechToText = {
+                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to Edge Hybrid Agent...")
+                    }
+                    try {
+                        speechLauncher.launch(intent)
+                    } catch (_: ActivityNotFoundException) {}
+                },
                 onDraftChanged = { draft = it },
                 onSend = {
-                    if (draft.isNotBlank() && !state.isGenerating) {
-                        onSend(draft)
+                    if ((draft.isNotBlank() || attachedDataUrl != null) && !state.isGenerating) {
+                        val textToSend = if (draft.isBlank() && attachedDataUrl != null) {
+                            "Analyze this image in detail and describe what you see."
+                        } else {
+                            draft
+                        }
+                        onSend(textToSend, attachedDataUrl)
                         draft = ""
+                        attachedBitmap = null
+                        attachedDataUrl = null
                     }
                 }
             )
@@ -289,6 +397,31 @@ private fun MessageBubble(
                     vertical = 12.dp
                 )
             ) {
+                // If message has an image attached, render thumbnail preview
+                if (!message.imageDataUrl.isNullOrBlank()) {
+                    val bitmap = remember(message.imageDataUrl) {
+                        try {
+                            val base64Data = message.imageDataUrl.substringAfter("base64,")
+                            val bytes = Base64.decode(base64Data, Base64.DEFAULT)
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                    bitmap?.let {
+                        Image(
+                            bitmap = it.asImageBitmap(),
+                            contentDescription = "Attached image",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 220.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
                 SelectionContainer {
                     Text(
                         text = message.content,
@@ -334,7 +467,7 @@ private fun ToolActivityRow(activity: ToolActivityUi) {
 
     Text(
         text = "• $label",
-        style = MaterialTheme.typography.labelMedium,
+        style = MaterialTheme.typography.bodySmall,
         color = if (activity.status == ToolActivityStatus.FAILED) {
             MaterialTheme.colorScheme.error
         } else {
@@ -374,6 +507,11 @@ private fun RecoveryAction(
 private fun MessageComposer(
     draft: String,
     enabled: Boolean,
+    attachedBitmap: Bitmap?,
+    onRemoveAttachment: () -> Unit,
+    onPickPhoto: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onStartSpeechToText: () -> Unit,
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit
 ) {
@@ -381,46 +519,121 @@ private fun MessageComposer(
         tonalElevation = 3.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
-            OutlinedTextField(
-                value = draft,
-                onValueChange = onDraftChanged,
-                modifier = Modifier.weight(1f),
-                enabled = enabled,
-                placeholder = {
-                    Text(text = stringResource(R.string.chat_input_hint))
-                },
-                maxLines = 5,
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Send
-                ),
-                keyboardActions = KeyboardActions(
-                    onSend = {
-                        if (draft.isNotBlank() && enabled) {
-                            onSend()
+            // Attached Image Thumbnail Preview Bar
+            if (attachedBitmap != null) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Image(
+                            bitmap = attachedBitmap.asImageBitmap(),
+                            contentDescription = "Image preview",
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(6.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Photo attached (Vision / OCR ready)",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = onRemoveAttachment,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Remove photo",
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
-                )
-            )
+                }
+            }
 
-            Button(
-                onClick = onSend,
-                enabled = enabled && draft.isNotBlank()
+            // Input Row with Action Icons & Send Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                if (stateIsGeneratingFromButton(enabled)) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
+                // Gallery Attachment Icon
+                IconButton(
+                    onClick = onPickPhoto,
+                    enabled = enabled,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Attach photo from gallery",
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                } else {
-                    Text(text = stringResource(R.string.send))
+                }
+
+                // Microphone / Speech-to-Text Icon
+                IconButton(
+                    onClick = onStartSpeechToText,
+                    enabled = enabled,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = "Speak to agent (Voice Input)",
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                }
+
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = onDraftChanged,
+                    modifier = Modifier.weight(1f),
+                    enabled = enabled,
+                    placeholder = {
+                        Text(
+                            text = if (attachedBitmap != null) "Ask about this photo or request OCR..." else stringResource(R.string.chat_input_hint),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
+                    maxLines = 4,
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Send
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSend = {
+                            if ((draft.isNotBlank() || attachedBitmap != null) && enabled) {
+                                onSend()
+                            }
+                        }
+                    )
+                )
+
+                Button(
+                    onClick = onSend,
+                    enabled = enabled && (draft.isNotBlank() || attachedBitmap != null)
+                ) {
+                    if (stateIsGeneratingFromButton(enabled)) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(text = stringResource(R.string.send))
+                    }
                 }
             }
         }
@@ -430,4 +643,5 @@ private fun MessageComposer(
 private fun stateIsGenerating(message: ChatMessageUi): Boolean =
     message.deliveryState == MessageDeliveryState.STREAMING
 
-private fun stateIsGeneratingFromButton(enabled: Boolean): Boolean = !enabled
+private fun stateIsGeneratingFromButton(enabled: Boolean): Boolean =
+    !enabled
