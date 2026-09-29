@@ -83,7 +83,8 @@ class CloudInferenceEngine @Inject constructor(
     private val settings: ProviderSettings,
     private val policy: AgentPolicy,
     private val clock: MonotonicClock,
-    private val suspendDelay: SuspendDelay
+    private val suspendDelay: SuspendDelay,
+    private val keyStore: com.edgehybrid.agent.data.local.SecureKeyStore
 ) : InferenceEngine {
 
     override fun streamChat(
@@ -92,10 +93,13 @@ class CloudInferenceEngine @Inject constructor(
     ): Flow<CloudStreamEvent> = flow {
         val startedAtNanos = clock.nowNanos()
         val accumulator = TurnAccumulator(clock, startedAtNanos)
+        val hasTools = tools.isNotEmpty()
+        val effectiveModel = keyStore.getSelectedCloudModel().takeIf { it.isNotBlank() } ?: settings.model
         val request = ChatCompletionRequest(
-            model = settings.model,
+            model = effectiveModel,
             messages = messages.map(ChatMessage::toApiMessage),
-            tools = tools
+            tools = if (hasTools) tools else null,
+            toolChoice = if (hasTools) "auto" else null
         )
 
         executeWithProviderRetries(request, accumulator) { delta ->
@@ -113,13 +117,16 @@ class CloudInferenceEngine @Inject constructor(
         onDelta: suspend (String) -> Unit
     ) {
         var retryCount = 0
+        val effectiveApiKey = keyStore.getOpenRouterApiKey().takeIf { it.isNotBlank() } ?: settings.apiKey
+        val effectiveBaseUrl = keyStore.getCustomEndpoint().takeIf { it.isNotBlank() } ?: settings.baseUrl
+        val effectiveUrl = "${effectiveBaseUrl.trimEnd('/')}/chat/completions"
 
         while (true) {
             try {
-                httpClient.preparePost(settings.completionUrl) {
+                httpClient.preparePost(effectiveUrl) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Text.EventStream)
-                    settings.apiKey
+                    effectiveApiKey
                         ?.takeIf(String::isNotBlank)
                         ?.let { key ->
                             header(HttpHeaders.Authorization, "Bearer $key")
@@ -144,6 +151,7 @@ class CloudInferenceEngine @Inject constructor(
                             .replace('\n', ' ')
                             .take(512)
 
+                        android.util.Log.e("CloudInferenceEngine", "HTTP $statusCode: $bodySnippet")
                         throw ProviderHttpException(
                             statusCode = statusCode,
                             responseSnippet = bodySnippet

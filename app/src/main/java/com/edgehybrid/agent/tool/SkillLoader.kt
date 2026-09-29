@@ -12,7 +12,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import java.util.Locale
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -51,8 +53,8 @@ class BuiltInSkillLoader @Inject constructor(
                                 put("description", "City name, for example Tokyo or London.")
                             })
                         })
-                        put("required", buildJsonObject {
-                            put("0", "location")
+                        put("required", buildJsonArray {
+                            add("location")
                         })
                         put("additionalProperties", false)
                     }
@@ -84,10 +86,10 @@ class BuiltInSkillLoader @Inject constructor(
                                 )
                             })
                         })
-                        put("required", buildJsonObject {
-                            put("0", "value")
-                            put("1", "from")
-                            put("2", "to")
+                        put("required", buildJsonArray {
+                            add("value")
+                            add("from")
+                            add("to")
                         })
                         put("additionalProperties", false)
                     }

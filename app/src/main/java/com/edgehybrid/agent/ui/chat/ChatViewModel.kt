@@ -173,9 +173,18 @@ class ChatViewModel @Inject constructor(
                 throw cancelled
             } catch (exception: Exception) {
                 Log.e("ChatViewModel", "Agent stream failed", exception)
+                val userFeedback = when {
+                    exception.message?.contains("401", ignoreCase = true) == true ->
+                        "Invalid API Key. Please configure your key in Settings."
+                    exception.message?.contains("429", ignoreCase = true) == true ->
+                        "Rate limit exceeded. Please wait a moment."
+                    !exception.message.isNullOrBlank() ->
+                        exception.message ?: "The agent could not complete this request."
+                    else -> "The agent could not complete this request."
+                }
                 showFailure(
                     assistantMessageId = assistantMessageId,
-                    message = "The agent could not complete this request."
+                    message = userFeedback
                 )
             }
         }

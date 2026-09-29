@@ -94,12 +94,12 @@ internal fun ChatMessage.toApiMessage(): ApiChatMessage =
 internal data class ChatCompletionRequest(
     val model: String,
     val messages: List<ApiChatMessage>,
-    val tools: List<ToolDefinition>,
+    val tools: List<ToolDefinition>? = null,
     val stream: Boolean = true,
     @SerialName("stream_options")
     val streamOptions: StreamOptions = StreamOptions(includeUsage = true),
     @SerialName("tool_choice")
-    val toolChoice: String = "auto"
+    val toolChoice: String? = null
 )
 
 @Serializable

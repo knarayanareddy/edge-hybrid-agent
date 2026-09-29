@@ -42,19 +42,28 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.SuggestionChip
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.edgehybrid.agent.R
 
 @Composable
 fun ChatRoute(
-    viewModel: ChatViewModel = hiltViewModel()
+    viewModel: ChatViewModel = hiltViewModel(),
+    onOpenSettings: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     ChatScreen(
         state = state,
         onSend = viewModel::send,
-        onRetry = viewModel::retryRecovery
+        onRetry = viewModel::retryRecovery,
+        onOpenSettings = onOpenSettings
     )
 }
 
@@ -63,7 +72,8 @@ fun ChatRoute(
 fun ChatScreen(
     state: ChatUiState,
     onSend: (String) -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onOpenSettings: () -> Unit = {}
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -82,10 +92,23 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = stringResource(R.string.chat_title),
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Column {
+                        Text(
+                            text = "Edge Hybrid Agent",
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "OpenRouter • Gemini 2.5 Flash",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Check, contentDescription = "Settings")
+                    }
                 }
             )
         }
@@ -102,22 +125,75 @@ fun ChatScreen(
                 )
             }
 
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(
-                    items = state.messages,
-                    key = ChatMessageUi::id
-                ) { message ->
-                    MessageBubble(
-                        message = message,
-                        onRetry = onRetry
-                    )
+            if (state.messages.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = MaterialTheme.shapes.extraLarge,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(56.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Share,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(28.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Edge Hybrid Agent",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "On-device security • Cloud reasoning • Native tools",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        SuggestionChip(
+                            onClick = { onSend("What is the weather in Tokyo right now?") },
+                            label = { Text("⛅ Check weather in Tokyo") }
+                        )
+                        SuggestionChip(
+                            onClick = { onSend("Convert 100 Fahrenheit to Celsius") },
+                            label = { Text("🌡️ Convert temperature") }
+                        )
+                        SuggestionChip(
+                            onClick = { onSend("Toggle the flashlight") },
+                            label = { Text("🔦 Toggle flashlight") }
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(
+                        items = state.messages,
+                        key = ChatMessageUi::id
+                    ) { message ->
+                        MessageBubble(
+                            message = message,
+                            onRetry = onRetry
+                        )
+                    }
                 }
             }
 
@@ -194,8 +270,7 @@ private fun MessageBubble(
                 SelectionContainer {
                     Text(
                         text = message.content,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.verticalScroll(rememberScrollState())
+                        style = MaterialTheme.typography.bodyLarge
                     )
                 }
 
