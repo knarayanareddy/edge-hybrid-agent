@@ -25,8 +25,8 @@ class JevRiskClassifier @Inject constructor() {
             )
         }
 
-        // High Risk Actions (>= 70): SMS sending, external calendar mutations, modifying contacts
-        val highRiskActions = listOf("send_sms", "create_calendar_event", "execute_payment", "modify_system_setting")
+        // High Risk Actions (>= 70): SMS sending, phone calls, calendar mutations
+        val highRiskActions = listOf("send_sms", "create_calendar_event", "execute_payment", "modify_system_setting", "initiate_phone_call")
         if (highRiskActions.any { lowerAction.contains(it) }) {
             return JevEvaluationResponse(
                 verdict = "CONFIRMATION_REQUIRED",
@@ -38,7 +38,7 @@ class JevRiskClassifier @Inject constructor() {
         }
 
         // Moderate Risk Actions (40 - 69): External network requests via web_extract or MCP
-        if (lowerAction.contains("web_extract") || lowerAction.startsWith("mcp:")) {
+        if (lowerAction.contains("web_extract") || lowerAction.contains("extract_webpage") || lowerAction.startsWith("mcp:")) {
             return JevEvaluationResponse(
                 verdict = "ALLOW_MONITORED",
                 riskScore = 45,

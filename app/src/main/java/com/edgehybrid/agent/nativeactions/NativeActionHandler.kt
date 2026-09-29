@@ -13,6 +13,7 @@ import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.provider.AlarmClock
 import android.provider.CalendarContract
+import android.provider.ContactsContract
 import androidx.core.content.ContextCompat
 import com.edgehybrid.agent.data.local.NoteDao
 import com.edgehybrid.agent.data.local.NoteEntity
@@ -267,6 +268,84 @@ class NativeActionHandler @Inject constructor(
                 Intent.ACTION_VIEW,
                 Uri.parse("https://t.me/share/url?text=" + Uri.encode(text))
             )
+            launchExternalIntent(webIntent)
+        }
+    }
+
+    suspend fun searchContacts(query: String): String = withContext(Dispatchers.IO) {
+        val hasPerm = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_CONTACTS
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasPerm) {
+            return@withContext JSONObject().apply {
+                put("permission_granted", false)
+                put("message", "READ_CONTACTS permission is required to search contacts on your phone.")
+            }.toString()
+        }
+
+        val contacts = JSONArray()
+        val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+        val projection = arrayOf(
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+            ContactsContract.CommonDataKinds.Phone.NUMBER
+        )
+        val selection = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?"
+        val selectionArgs = arrayOf("%$query%")
+
+        try {
+            val cursor = context.contentResolver.query(uri, projection, selection, selectionArgs, null)
+            cursor?.use {
+                val nameIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                var count = 0
+                while (it.moveToNext() && count < 10) {
+                    val name = if (nameIdx >= 0) it.getString(nameIdx) ?: "Unknown" else "Unknown"
+                    val number = if (numIdx >= 0) it.getString(numIdx) ?: "" else ""
+                    contacts.put(JSONObject().apply {
+                        put("name", name)
+                        put("phone", number)
+                    })
+                    count++
+                }
+            }
+        } catch (e: Exception) {
+            return@withContext JSONObject().apply { put("error", e.message ?: "Failed to read contacts") }.toString()
+        }
+
+        JSONObject().apply {
+            put("query", query)
+            put("count", contacts.length())
+            put("contacts", contacts)
+            if (contacts.length() == 0) put("message", "No contacts found matching '$query'")
+        }.toString()
+    }
+
+    suspend fun initiatePhoneCall(phoneNumber: String): Boolean = withContext(Dispatchers.IO) {
+        val cleanNumber = phoneNumber.replace(Regex("[^0-9+]"), "")
+        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$cleanNumber"))
+        launchExternalIntent(intent)
+    }
+
+    suspend fun draftEmail(recipient: String, subject: String, body: String): Boolean = withContext(Dispatchers.IO) {
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("mailto:" + Uri.encode(recipient.trim()))
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+        launchExternalIntent(intent)
+    }
+
+    suspend fun controlSpotify(query: String): Boolean = withContext(Dispatchers.IO) {
+        val encoded = Uri.encode(query.trim())
+        val spotifyIntent = Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:$encoded")).apply {
+            setPackage("com.spotify.music")
+        }
+        if (launchExternalIntent(spotifyIntent)) {
+            true
+        } else {
+            val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://open.spotify.com/search/$encoded"))
             launchExternalIntent(webIntent)
         }
     }

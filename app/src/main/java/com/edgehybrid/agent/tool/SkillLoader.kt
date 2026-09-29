@@ -353,6 +353,126 @@ class BuiltInSkillLoader @Inject constructor(
                         put("additionalProperties", false)
                     }
                 )
+            ),
+            // 15. Search Contacts
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = SEARCH_CONTACTS_TOOL_NAME,
+                    description = "Search your device contacts by name to find their phone numbers and details.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("query", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Name or name fragment of the contact to find.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("query") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 16. Initiate Phone Call
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = INITIATE_PHONE_CALL_TOOL_NAME,
+                    description = "Open the phone dialer with a specific phone number ready to call.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("phone_number", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Phone number to dial.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("phone_number") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 17. Draft Email
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = DRAFT_EMAIL_TOOL_NAME,
+                    description = "Draft and prepare an email with a recipient, subject, and body content.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("recipient", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Recipient email address.")
+                            })
+                            put("subject", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Subject line of the email.")
+                            })
+                            put("body", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Body content or meeting notes.")
+                            })
+                        })
+                        put("required", buildJsonArray {
+                            add("recipient")
+                            add("subject")
+                            add("body")
+                        })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 18. Control Spotify
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = CONTROL_SPOTIFY_TOOL_NAME,
+                    description = "Search and launch music playback on Spotify for any song, artist, album, or playlist.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("query", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Search query, for example artist name, track title, or genre.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("query") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 19. Live Web Search
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = LIVE_WEB_SEARCH_TOOL_NAME,
+                    description = "Perform a live, privacy-preserving web search for real-time information, news, and technical topics.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("query", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Search query terms.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("query") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 20. Extract Webpage Content
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = EXTRACT_WEBPAGE_TOOL_NAME,
+                    description = "Fetch, extract, and read clean text content from any public HTTP or HTTPS web page URL.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("url", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Full URL of the web page to extract (e.g. https://example.com).")
+                            })
+                        })
+                        put("required", buildJsonArray { add("url") })
+                        put("additionalProperties", false)
+                    }
+                )
             )
         )
 
@@ -373,6 +493,12 @@ class BuiltInSkillLoader @Inject constructor(
                 CREATE_CALENDAR_EVENT_TOOL_NAME -> executeCreateCalendarEvent(call.function.arguments)
                 QUERY_CALENDAR_EVENTS_TOOL_NAME -> executeQueryCalendarEvents(call.function.arguments)
                 SEND_TELEGRAM_MESSAGE_TOOL_NAME -> executeTelegramMessage(call.function.arguments)
+                SEARCH_CONTACTS_TOOL_NAME -> executeSearchContacts(call.function.arguments)
+                INITIATE_PHONE_CALL_TOOL_NAME -> executeInitiatePhoneCall(call.function.arguments)
+                DRAFT_EMAIL_TOOL_NAME -> executeDraftEmail(call.function.arguments)
+                CONTROL_SPOTIFY_TOOL_NAME -> executeControlSpotify(call.function.arguments)
+                LIVE_WEB_SEARCH_TOOL_NAME -> executeLiveWebSearch(call.function.arguments)
+                EXTRACT_WEBPAGE_TOOL_NAME -> executeExtractWebpage(call.function.arguments)
                 else -> throw SkillExecutionException("Unsupported skill: ${call.function.name}")
             }
         } catch (e: Exception) {
@@ -850,6 +976,132 @@ class BuiltInSkillLoader @Inject constructor(
         }
     }
 
+    // 15. Search Contacts
+    private suspend fun executeSearchContacts(arguments: JsonObject): ToolExecutionOutcome {
+        val query = arguments["query"]?.jsonPrimitive?.content?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: throw SkillExecutionException("Search query is required")
+        val json = nativeActionHandler.searchContacts(query)
+        return ToolExecutionOutcome(json, false)
+    }
+
+    // 16. Initiate Phone Call
+    private suspend fun executeInitiatePhoneCall(arguments: JsonObject): ToolExecutionOutcome {
+        val phone = arguments["phone_number"]?.jsonPrimitive?.content?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: throw SkillExecutionException("Phone number is required")
+        val success = nativeActionHandler.initiatePhoneCall(phone)
+        val result = buildJsonObject {
+            put("phone_number", phone)
+            put("dialer_opened", success)
+            put("status", if (success) "Phone dialer opened with $phone" else "Failed to open phone dialer")
+        }
+        return ToolExecutionOutcome(result.toString(), !success)
+    }
+
+    // 17. Draft Email
+    private suspend fun executeDraftEmail(arguments: JsonObject): ToolExecutionOutcome {
+        val recipient = arguments["recipient"]?.jsonPrimitive?.content?.trim() ?: ""
+        val subject = arguments["subject"]?.jsonPrimitive?.content?.trim() ?: ""
+        val body = arguments["body"]?.jsonPrimitive?.content?.trim() ?: ""
+        val success = nativeActionHandler.draftEmail(recipient, subject, body)
+        val result = buildJsonObject {
+            put("recipient", recipient)
+            put("subject", subject)
+            put("email_draft_opened", success)
+            put("status", if (success) "Email client opened with draft" else "Failed to open email client")
+        }
+        return ToolExecutionOutcome(result.toString(), !success)
+    }
+
+    // 18. Control Spotify
+    private suspend fun executeControlSpotify(arguments: JsonObject): ToolExecutionOutcome {
+        val query = arguments["query"]?.jsonPrimitive?.content?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: throw SkillExecutionException("Music query is required")
+        val success = nativeActionHandler.controlSpotify(query)
+        val result = buildJsonObject {
+            put("query", query)
+            put("spotify_launched", success)
+            put("status", if (success) "Spotify search launched for '$query'" else "Failed to launch Spotify")
+        }
+        return ToolExecutionOutcome(result.toString(), !success)
+    }
+
+    // 19. Live Web Search
+    private suspend fun executeLiveWebSearch(arguments: JsonObject): ToolExecutionOutcome {
+        val query = arguments["query"]?.jsonPrimitive?.content?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: throw SkillExecutionException("Search query is required")
+        val encoded = URLEncoder.encode(query, StandardCharsets.UTF_8.name())
+        val url = "https://api.duckduckgo.com/?q=$encoded&format=json&no_html=1&skip_disambig=1"
+
+        try {
+            val response = httpClient.get(url)
+            val body = response.body<JsonObject>()
+            val abstractText = body["AbstractText"]?.jsonPrimitive?.content?.trim() ?: ""
+            val abstractSource = body["AbstractSource"]?.jsonPrimitive?.content ?: "DuckDuckGo"
+            val abstractUrl = body["AbstractURL"]?.jsonPrimitive?.content ?: ""
+            val heading = body["Heading"]?.jsonPrimitive?.content ?: query
+
+            val relatedArray = body["RelatedTopics"]?.jsonArray
+            val relatedSnippets = mutableListOf<String>()
+            relatedArray?.forEach { elem ->
+                if (elem is JsonObject && elem.containsKey("Text")) {
+                    elem["Text"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }?.let {
+                        if (relatedSnippets.size < 5) relatedSnippets.add(it)
+                    }
+                }
+            }
+
+            val result = buildJsonObject {
+                put("query", query)
+                put("heading", heading)
+                put("summary", abstractText.ifBlank { relatedSnippets.joinToString("\n• ") })
+                put("source", abstractSource)
+                if (abstractUrl.isNotBlank()) put("url", abstractUrl)
+            }
+            return ToolExecutionOutcome(result.toString(), false)
+        } catch (e: Exception) {
+            val fallback = buildJsonObject {
+                put("query", query)
+                put("error", "Web search failed: ${e.message}")
+            }
+            return ToolExecutionOutcome(fallback.toString(), true)
+        }
+    }
+
+    // 20. Extract Webpage Content
+    private suspend fun executeExtractWebpage(arguments: JsonObject): ToolExecutionOutcome {
+        val urlStr = arguments["url"]?.jsonPrimitive?.content?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: throw SkillExecutionException("URL is required")
+
+        try {
+            val response = httpClient.get(urlStr)
+            val raw = response.bodyAsText()
+            val noScript = raw.replace(Regex("<script[\\s\\S]*?</script>", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("<style[\\s\\S]*?</style>", RegexOption.IGNORE_CASE), "")
+            val cleanText = noScript.replace(Regex("<[^>]+>"), " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+                .take(2000)
+
+            val result = buildJsonObject {
+                put("url", urlStr)
+                put("status", response.status.value)
+                put("content_preview", cleanText)
+            }
+            return ToolExecutionOutcome(result.toString(), false)
+        } catch (e: Exception) {
+            val result = buildJsonObject {
+                put("url", urlStr)
+                put("error", e.message ?: "Failed to fetch webpage")
+            }
+            return ToolExecutionOutcome(result.toString(), true)
+        }
+    }
+
     companion object {
         const val WEATHER_TOOL_NAME = "get_current_weather"
         const val CONVERSION_TOOL_NAME = "convert_temperature"
@@ -865,5 +1117,11 @@ class BuiltInSkillLoader @Inject constructor(
         const val CREATE_CALENDAR_EVENT_TOOL_NAME = "create_calendar_event"
         const val QUERY_CALENDAR_EVENTS_TOOL_NAME = "query_calendar_events"
         const val SEND_TELEGRAM_MESSAGE_TOOL_NAME = "send_telegram_message"
+        const val SEARCH_CONTACTS_TOOL_NAME = "search_contacts"
+        const val INITIATE_PHONE_CALL_TOOL_NAME = "initiate_phone_call"
+        const val DRAFT_EMAIL_TOOL_NAME = "draft_email"
+        const val CONTROL_SPOTIFY_TOOL_NAME = "control_spotify"
+        const val LIVE_WEB_SEARCH_TOOL_NAME = "live_web_search"
+        const val EXTRACT_WEBPAGE_TOOL_NAME = "extract_webpage_content"
     }
 }
