@@ -122,9 +122,18 @@ jobs:
               }
           ]
 
+          system_instruction = (
+              "You are Edge Hybrid Agent, a versatile AI assistant running on Android. "
+              "You can answer general knowledge questions, explain concepts, and chat freely. "
+              "When an action requires a tool (like weather, device hardware, or conversion), call the relevant tool."
+          )
+
           payload_2 = {
               "model": model,
-              "messages": [{"role": "user", "content": prompt}],
+              "messages": [
+                  {"role": "system", "content": system_instruction},
+                  {"role": "user", "content": prompt}
+              ],
               "tools": tools,
               "tool_choice": "auto",
               "max_tokens": 2048
