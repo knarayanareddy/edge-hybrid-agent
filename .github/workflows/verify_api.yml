@@ -220,7 +220,7 @@ jobs:
           )
 
           def send_query(prompt, expected_tool=None, image_data_url=None):
-              nonlocal current_key_idx, model
+              global current_key_idx, model
               if image_data_url:
                   user_content = [
                       {"type": "text", "text": prompt},
@@ -453,7 +453,7 @@ jobs:
           ]
 
           def call_llm():
-              nonlocal current_key_idx, model
+              global current_key_idx, model
               while current_key_idx < len(keys):
                   active_key = keys[current_key_idx]
                   req = urllib.request.Request(
