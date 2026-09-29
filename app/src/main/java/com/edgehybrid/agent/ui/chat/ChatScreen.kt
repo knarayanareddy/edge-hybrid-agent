@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
@@ -95,6 +98,10 @@ fun ChatRoute(
         onSend = { text, imageDataUrl -> viewModel.send(text, imageDataUrl) },
         onCancel = viewModel::cancelGeneration,
         onClearChat = viewModel::clearChat,
+        onNewChat = viewModel::createNewSession,
+        onSelectSession = viewModel::selectSession,
+        onDeleteSession = viewModel::deleteSession,
+        onToggleDrawer = viewModel::toggleSessionDrawer,
         onRetry = viewModel::retryRecovery,
         onTranscribeAudio = viewModel::transcribeMeetingAudio,
         onOpenSettings = onOpenSettings
@@ -108,6 +115,10 @@ fun ChatScreen(
     onSend: (String, String?) -> Unit,
     onCancel: () -> Unit = {},
     onClearChat: () -> Unit = {},
+    onNewChat: () -> Unit = {},
+    onSelectSession: (String) -> Unit = {},
+    onDeleteSession: (String) -> Unit = {},
+    onToggleDrawer: (Boolean?) -> Unit = {},
     onRetry: () -> Unit,
     onTranscribeAudio: (ByteArray, String, (String) -> Unit, (String) -> Unit) -> Unit = { _, _, _, _ -> },
     onOpenSettings: () -> Unit = {}
@@ -221,21 +232,31 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = { onToggleDrawer(true) }) {
+                        Icon(Icons.Default.Share, contentDescription = "Conversations Switcher")
+                    }
+                },
                 title = {
-                    Column {
+                    val activeSession = state.sessions.firstOrNull { it.id == state.currentSessionId }
+                    Column(modifier = Modifier.clickable { onToggleDrawer(true) }) {
                         Text(
-                            text = "Edge Hybrid Agent",
+                            text = activeSession?.title ?: "Edge Hybrid Agent",
                             fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1
                         )
                         Text(
-                            text = "Multimodal Vision • Groq Whisper • 23 Tools",
+                            text = "Multimodal Vision • Groq Whisper • 30 Tools",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
                 actions = {
+                    IconButton(onClick = onNewChat) {
+                        Icon(Icons.Default.Add, contentDescription = "New Chat")
+                    }
                     IconButton(onClick = onClearChat) {
                         Icon(Icons.Default.Delete, contentDescription = "Clear Chat History")
                     }
@@ -438,6 +459,83 @@ fun ChatScreen(
                     }
                 }
             )
+        }
+
+        if (state.isSessionDrawerOpen) {
+            ModalBottomSheet(
+                onDismissRequest = { onToggleDrawer(false) }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Conversations",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Button(
+                            onClick = onNewChat,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("New Chat")
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 380.dp)
+                    ) {
+                        items(state.sessions, key = { it.id }) { session ->
+                            val isSelected = session.id == state.currentSessionId
+                            Surface(
+                                onClick = { onSelectSession(session.id) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = session.title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    IconButton(
+                                        onClick = { onDeleteSession(session.id) },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Delete chat",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
         }
     }
 }

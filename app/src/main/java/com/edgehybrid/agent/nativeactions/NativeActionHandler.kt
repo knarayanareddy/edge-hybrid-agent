@@ -93,6 +93,33 @@ class NativeActionHandler @Inject constructor(
             }
         }
 
+    suspend fun setAlarm(hour: Int, minutes: Int, message: String): Boolean =
+        withContext(Dispatchers.IO) {
+            if (hour !in 0..23 || minutes !in 0..59) {
+                false
+            } else {
+                val intent = Intent(AlarmClock.ACTION_SET_ALARM)
+                    .putExtra(AlarmClock.EXTRA_HOUR, hour)
+                    .putExtra(AlarmClock.EXTRA_MINUTES, minutes)
+                    .putExtra(AlarmClock.EXTRA_MESSAGE, message)
+                    .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                launchExternalIntent(intent)
+            }
+        }
+
+    suspend fun launchCamera(): Boolean =
+        withContext(Dispatchers.IO) {
+            val captureIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+            if (launchExternalIntent(captureIntent)) {
+                true
+            } else {
+                val cameraAppIntent = Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_APP_CAMERA)
+                }
+                launchExternalIntent(cameraAppIntent)
+            }
+        }
+
     suspend fun prepareSms(phone: String, message: String): ActionConfirmation =
         withContext(Dispatchers.IO) {
             ActionConfirmation(

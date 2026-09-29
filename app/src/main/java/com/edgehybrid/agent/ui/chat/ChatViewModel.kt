@@ -21,7 +21,10 @@ import kotlinx.coroutines.launch
 data class ChatUiState(
     val messages: List<ChatMessageUi> = emptyList(),
     val isGenerating: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val currentSessionId: String = "default_chat_session",
+    val sessions: List<com.edgehybrid.agent.data.local.ChatSessionEntity> = emptyList(),
+    val isSessionDrawerOpen: Boolean = false
 )
 
 data class ChatMessageUi(
@@ -77,33 +80,109 @@ class ChatViewModel @Inject constructor(
     private var pendingRetry: PendingRetry? = null
 
     init {
-        loadChatHistory()
+        observeSessions()
+        loadChatHistory(DEFAULT_SESSION_ID)
     }
 
-    private fun loadChatHistory() {
+    private fun observeSessions() {
+        viewModelScope.launch {
+            chatDao?.getAllSessions()?.collect { sessionList ->
+                mutableUiState.update { it.copy(sessions = sessionList) }
+            }
+        }
+    }
+
+    fun toggleSessionDrawer(isOpen: Boolean? = null) {
+        mutableUiState.update {
+            it.copy(isSessionDrawerOpen = isOpen ?: !it.isSessionDrawerOpen)
+        }
+    }
+
+    fun createNewSession() {
+        cancelGeneration()
+        val newSessionId = UUID.randomUUID().toString()
+        val newSession = com.edgehybrid.agent.data.local.ChatSessionEntity(
+            id = newSessionId,
+            title = "New Chat",
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        )
+        viewModelScope.launch {
+            try {
+                chatDao?.insertSession(newSession)
+                mutableUiState.update {
+                    it.copy(
+                        currentSessionId = newSessionId,
+                        messages = emptyList(),
+                        isSessionDrawerOpen = false
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "Failed to create new session", e)
+            }
+        }
+    }
+
+    fun selectSession(sessionId: String) {
+        if (sessionId == mutableUiState.value.currentSessionId) {
+            mutableUiState.update { it.copy(isSessionDrawerOpen = false) }
+            return
+        }
+        cancelGeneration()
+        mutableUiState.update {
+            it.copy(
+                currentSessionId = sessionId,
+                isSessionDrawerOpen = false
+            )
+        }
+        loadChatHistory(sessionId)
+    }
+
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            try {
+                chatDao?.deleteSession(sessionId)
+                if (mutableUiState.value.currentSessionId == sessionId) {
+                    val remaining = mutableUiState.value.sessions.filter { it.id != sessionId }
+                    if (remaining.isNotEmpty()) {
+                        selectSession(remaining.first().id)
+                    } else {
+                        createNewSession()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "Failed to delete session", e)
+            }
+        }
+    }
+
+    private fun loadChatHistory(sessionId: String) {
         viewModelScope.launch {
             try {
                 chatDao?.let { dao ->
-                    if (dao.getSessionById(DEFAULT_SESSION_ID) == null) {
+                    if (dao.getSessionById(sessionId) == null) {
                         dao.insertSession(
                             com.edgehybrid.agent.data.local.ChatSessionEntity(
-                                id = DEFAULT_SESSION_ID,
-                                title = "Default Session"
+                                id = sessionId,
+                                title = if (sessionId == DEFAULT_SESSION_ID) "Main Chat" else "New Chat"
                             )
                         )
                     }
-                    val entities = dao.getMessagesListForSession(DEFAULT_SESSION_ID)
-                    if (entities.isNotEmpty()) {
-                        val loaded = entities.map { entity ->
-                            ChatMessageUi(
-                                id = entity.id,
-                                role = if (entity.role.equals("user", ignoreCase = true)) ChatMessageRole.USER else ChatMessageRole.ASSISTANT,
-                                content = entity.content,
-                                imageDataUrl = entity.imageUrlsJson,
-                                deliveryState = MessageDeliveryState.COMPLETE
-                            )
-                        }
-                        mutableUiState.update { it.copy(messages = loaded) }
+                    val entities = dao.getMessagesListForSession(sessionId)
+                    val loaded = entities.map { entity ->
+                        ChatMessageUi(
+                            id = entity.id,
+                            role = if (entity.role.equals("user", ignoreCase = true)) ChatMessageRole.USER else ChatMessageRole.ASSISTANT,
+                            content = entity.content,
+                            imageDataUrl = entity.imageUrlsJson,
+                            deliveryState = MessageDeliveryState.COMPLETE
+                        )
+                    }
+                    mutableUiState.update {
+                        it.copy(
+                            currentSessionId = sessionId,
+                            messages = loaded
+                        )
                     }
                 }
             } catch (e: Exception) {
@@ -113,21 +192,25 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun persistMessage(message: ChatMessageUi) {
+        val sessionId = mutableUiState.value.currentSessionId
         viewModelScope.launch {
             try {
                 chatDao?.let { dao ->
-                    if (dao.getSessionById(DEFAULT_SESSION_ID) == null) {
+                    val existing = dao.getSessionById(sessionId)
+                    if (existing == null) {
                         dao.insertSession(
                             com.edgehybrid.agent.data.local.ChatSessionEntity(
-                                id = DEFAULT_SESSION_ID,
-                                title = "Default Session"
+                                id = sessionId,
+                                title = if (message.role == ChatMessageRole.USER) message.content.take(30).trim() else "Chat"
                             )
                         )
+                    } else if (existing.title == "New Chat" && message.role == ChatMessageRole.USER && message.content.isNotBlank()) {
+                        dao.updateSession(existing.copy(title = message.content.take(30).trim(), updatedAt = System.currentTimeMillis()))
                     }
                     dao.insertMessage(
                         com.edgehybrid.agent.data.local.ChatMessageEntity(
                             id = message.id,
-                            sessionId = DEFAULT_SESSION_ID,
+                            sessionId = sessionId,
                             role = if (message.role == ChatMessageRole.USER) "user" else "assistant",
                             content = message.content,
                             imageUrlsJson = message.imageDataUrl,
@@ -172,6 +255,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun clearChat() {
+        val sessionId = mutableUiState.value.currentSessionId
         generationJob?.cancel()
         generationJob = null
         mutableUiState.update {
@@ -183,7 +267,7 @@ class ChatViewModel @Inject constructor(
         }
         viewModelScope.launch {
             try {
-                chatDao?.deleteMessagesForSession(DEFAULT_SESSION_ID)
+                chatDao?.deleteMessagesForSession(sessionId)
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "Failed to clear chat session", e)
             }

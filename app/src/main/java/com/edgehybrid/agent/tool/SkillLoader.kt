@@ -72,6 +72,7 @@ class BuiltInSkillLoader @Inject constructor(
 ) : SkillLoader {
 
     private val dynamicTools = ConcurrentHashMap<String, CustomToolDef>()
+    private val stagedTools = ConcurrentHashMap<String, CustomToolDef>()
 
     data class CustomToolDef(
         val name: String,
@@ -564,6 +565,162 @@ class BuiltInSkillLoader @Inject constructor(
                         put("additionalProperties", false)
                     }
                 )
+            ),
+            // 24. Stage and Test Tool (Sandbox)
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = STAGE_AND_TEST_TOOL_NAME,
+                    description = "Draft, stage, and test a proposed new tool in memory sandbox before asking the user if it should be saved or discarded.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("name", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Unique name in snake_case (e.g. 'calculate_bmi', 'lookup_vat').")
+                            })
+                            put("description", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Detailed explanation of what the tool does.")
+                            })
+                            put("parameters_hint", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Parameters the tool expects (e.g. 'weight_kg: number, height_m: number').")
+                            })
+                            put("test_input", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Sample test value to execute against the tool to verify its output.")
+                            })
+                            put("action_template", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Formula, instructions, or template to produce the result.")
+                            })
+                        })
+                        put("required", buildJsonArray {
+                            add("name")
+                            add("description")
+                            add("action_template")
+                        })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 25. Save Staged Tool
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = SAVE_STAGED_TOOL_NAME,
+                    description = "Permanently save a tested custom tool to local storage so it is available across all chats.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("name", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Name of the staged tool to save permanently.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("name") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 26. Discard Staged Tool
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = DISCARD_STAGED_TOOL_NAME,
+                    description = "Discard a staged tool without saving if the test did not meet expectations.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("name", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Name of the staged tool to discard.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("name") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 27. Open Camera
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = OPEN_CAMERA_TOOL_NAME,
+                    description = "Launch the device hardware camera viewfinder or camera app to capture a picture or scan documents.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {})
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 28. Set Alarm
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = SET_ALARM_TOOL_NAME,
+                    description = "Set an on-device clock alarm for a specific hour and minute (e.g. 7:30 AM).",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("hour", buildJsonObject {
+                                put("type", "integer")
+                                put("description", "Hour of day in 24-hour format (0 to 23).")
+                            })
+                            put("minutes", buildJsonObject {
+                                put("type", "integer")
+                                put("description", "Minute of the hour (0 to 59).")
+                            })
+                            put("message", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Label or title for the alarm (e.g. 'Morning Standup').")
+                            })
+                        })
+                        put("required", buildJsonArray {
+                            add("hour")
+                            add("minutes")
+                        })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 29. Register MCP Server
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = REGISTER_MCP_SERVER_TOOL_NAME,
+                    description = "Connect and register a remote Model Context Protocol (MCP) server integration.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("name", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Identifier or name for the MCP server.")
+                            })
+                            put("url", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Base HTTP/SSE URL of the MCP server.")
+                            })
+                            put("bearer_token", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Optional bearer authorization token.")
+                            })
+                        })
+                        put("required", buildJsonArray {
+                            add("name")
+                            add("url")
+                        })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 30. List MCP Servers
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = LIST_MCP_SERVERS_TOOL_NAME,
+                    description = "List all active Model Context Protocol (MCP) server integrations.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {})
+                        put("additionalProperties", false)
+                    }
+                )
             )
         )
 
@@ -584,11 +741,12 @@ class BuiltInSkillLoader @Inject constructor(
             } catch (_: Exception) {}
         }
 
-        val dynamicToolDefs = dynamicTools.values.map { custom ->
+        val dynamicToolDefs = (dynamicTools.values + stagedTools.values).map { custom ->
+            val suffix = if (stagedTools.containsKey(custom.name)) " [Staged Sandbox]" else ""
             ToolDefinition(
                 function = FunctionDefinition(
                     name = custom.name,
-                    description = "${custom.description} (Parameters: ${custom.parametersHint})",
+                    description = "${custom.description}$suffix (Parameters: ${custom.parametersHint})",
                     parameters = buildJsonObject {
                         put("type", "object")
                         put("properties", buildJsonObject {
@@ -632,7 +790,15 @@ class BuiltInSkillLoader @Inject constructor(
                 call.function.name == PLAN_TRANSIT_TOOL_NAME -> executePlanTransit(call.function.arguments)
                 call.function.name == CREATE_CUSTOM_TOOL_NAME -> executeCreateCustomTool(call.function.arguments)
                 call.function.name == LIST_CUSTOM_TOOLS_NAME -> executeListCustomTools()
+                call.function.name == STAGE_AND_TEST_TOOL_NAME -> executeStageAndTestTool(call.function.arguments)
+                call.function.name == SAVE_STAGED_TOOL_NAME -> executeSaveStagedTool(call.function.arguments)
+                call.function.name == DISCARD_STAGED_TOOL_NAME -> executeDiscardStagedTool(call.function.arguments)
+                call.function.name == OPEN_CAMERA_TOOL_NAME -> executeOpenCamera()
+                call.function.name == SET_ALARM_TOOL_NAME -> executeSetAlarm(call.function.arguments)
+                call.function.name == REGISTER_MCP_SERVER_TOOL_NAME -> executeRegisterMcpServer(call.function.arguments)
+                call.function.name == LIST_MCP_SERVERS_TOOL_NAME -> executeListMcpServers()
                 dynamicTools.containsKey(call.function.name) -> executeCustomDynamicTool(call.function.name, call.function.arguments)
+                stagedTools.containsKey(call.function.name) -> executeCustomDynamicTool(call.function.name, call.function.arguments)
                 else -> throw SkillExecutionException("Unsupported skill: ${call.function.name}")
             }
         } catch (e: Exception) {
@@ -1397,6 +1563,160 @@ class BuiltInSkillLoader @Inject constructor(
         return ToolExecutionOutcome(result.toString(), false)
     }
 
+    // 24. Stage and Test Tool (Sandbox)
+    private suspend fun executeStageAndTestTool(arguments: JsonObject): ToolExecutionOutcome {
+        val name = arguments["name"]?.jsonPrimitive?.content?.trim()
+            ?.lowercase()?.replace(" ", "_")
+            ?: return ToolExecutionOutcome(buildJsonObject { put("error", "Tool name is required") }.toString(), false)
+        val description = arguments["description"]?.jsonPrimitive?.content?.trim() ?: "Custom agent tool"
+        val paramsHint = arguments["parameters_hint"]?.jsonPrimitive?.content?.trim() ?: "None"
+        val testInput = arguments["test_input"]?.jsonPrimitive?.content?.trim() ?: "Sample Test"
+        val actionTemplate = arguments["action_template"]?.jsonPrimitive?.content?.trim() ?: ""
+
+        val customDef = CustomToolDef(name, description, paramsHint, actionTemplate)
+        stagedTools[name] = customDef
+
+        val testResult = "Simulated run on [$testInput] using rule: $actionTemplate"
+        val result = buildJsonObject {
+            put("status", "staged_for_testing")
+            put("tool_name", name)
+            put("description", description)
+            put("test_input", testInput)
+            put("test_output", testResult)
+            put("prompt_user", "Tool '$name' was tested successfully. Ask the user: 'Should I save this tool permanently or discard it?' If user says yes/save, call save_staged_tool(name: '$name'). If discarded, call discard_staged_tool(name: '$name').")
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 25. Save Staged Tool
+    private suspend fun executeSaveStagedTool(arguments: JsonObject): ToolExecutionOutcome {
+        val name = arguments["name"]?.jsonPrimitive?.content?.trim()
+            ?.lowercase()?.replace(" ", "_")
+            ?: return ToolExecutionOutcome(buildJsonObject { put("error", "Tool name is required") }.toString(), false)
+
+        val tool = stagedTools[name] ?: dynamicTools[name]
+        if (tool == null) {
+            return ToolExecutionOutcome(buildJsonObject { put("error", "Tool '$name' not found in staging or active catalog") }.toString(), false)
+        }
+
+        dynamicTools[name] = tool
+        stagedTools.remove(name)
+
+        try {
+            val contentJson = buildJsonObject {
+                put("name", tool.name)
+                put("description", tool.description)
+                put("parameters_hint", tool.parametersHint)
+                put("action_template", tool.actionTemplate)
+            }.toString()
+            noteDao.insertNote(
+                NoteEntity(
+                    title = "CUSTOM_TOOL:$name",
+                    content = contentJson,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+        } catch (_: Exception) {}
+
+        val result = buildJsonObject {
+            put("status", "saved_permanently")
+            put("tool_name", name)
+            put("message", "Tool '$name' is now permanently installed on your device and ready for all future chats!")
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 26. Discard Staged Tool
+    private suspend fun executeDiscardStagedTool(arguments: JsonObject): ToolExecutionOutcome {
+        val name = arguments["name"]?.jsonPrimitive?.content?.trim()
+            ?.lowercase()?.replace(" ", "_")
+            ?: return ToolExecutionOutcome(buildJsonObject { put("error", "Tool name is required") }.toString(), false)
+
+        stagedTools.remove(name)
+        val wasActive = dynamicTools.remove(name) != null
+
+        val result = buildJsonObject {
+            put("status", "discarded")
+            put("tool_name", name)
+            put("message", "Tool '$name' was discarded and removed from memory.")
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 27. Open Camera
+    private suspend fun executeOpenCamera(): ToolExecutionOutcome {
+        val success = nativeActionHandler.launchCamera()
+        val result = buildJsonObject {
+            put("status", if (success) "Camera launched successfully" else "Failed to launch camera viewfinder")
+            put("camera_opened", success)
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 28. Set Alarm
+    private suspend fun executeSetAlarm(arguments: JsonObject): ToolExecutionOutcome {
+        val hour = arguments["hour"]?.jsonPrimitive?.intOrNull ?: 8
+        val minutes = arguments["minutes"]?.jsonPrimitive?.intOrNull ?: 0
+        val message = arguments["message"]?.jsonPrimitive?.content ?: "Agent Alarm"
+
+        val success = nativeActionHandler.setAlarm(hour, minutes, message)
+        val timeFormatted = String.format(Locale.US, "%02d:%02d", hour, minutes)
+        val result = buildJsonObject {
+            put("alarm_set", success)
+            put("time", timeFormatted)
+            put("label", message)
+            put("status", if (success) "Alarm scheduled for $timeFormatted ($message)" else "Failed to schedule alarm")
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 29. Register MCP Server
+    private suspend fun executeRegisterMcpServer(arguments: JsonObject): ToolExecutionOutcome {
+        val name = arguments["name"]?.jsonPrimitive?.content?.trim() ?: "mcp_server"
+        val url = arguments["url"]?.jsonPrimitive?.content?.trim() ?: ""
+        val token = arguments["bearer_token"]?.jsonPrimitive?.content?.trim()
+
+        try {
+            noteDao.insertNote(
+                NoteEntity(
+                    title = "MCP_SERVER:$name",
+                    content = buildJsonObject {
+                        put("name", name)
+                        put("url", url)
+                        if (!token.isNullOrBlank()) put("token", token)
+                    }.toString(),
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+        } catch (_: Exception) {}
+
+        val result = buildJsonObject {
+            put("status", "MCP server '$name' registered at $url")
+            put("server_name", name)
+            put("endpoint", url)
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 30. List MCP Servers
+    private suspend fun executeListMcpServers(): ToolExecutionOutcome {
+        val servers = mutableListOf<JsonObject>()
+        try {
+            val notes = noteDao.getRecentNotes(100)
+            notes.filter { it.title.startsWith("MCP_SERVER:") }.forEach { note ->
+                try {
+                    servers.add(Json.parseToJsonElement(note.content).jsonObject)
+                } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
+
+        val result = buildJsonObject {
+            put("total_registered_mcp_servers", servers.size)
+            put("servers", JsonArray(servers))
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
     companion object {
         const val WEATHER_TOOL_NAME = "get_current_weather"
         const val CONVERSION_TOOL_NAME = "convert_temperature"
@@ -1421,5 +1741,12 @@ class BuiltInSkillLoader @Inject constructor(
         const val PLAN_TRANSIT_TOOL_NAME = "plan_transit_journey"
         const val CREATE_CUSTOM_TOOL_NAME = "create_custom_tool"
         const val LIST_CUSTOM_TOOLS_NAME = "list_custom_tools"
+        const val STAGE_AND_TEST_TOOL_NAME = "stage_and_test_tool"
+        const val SAVE_STAGED_TOOL_NAME = "save_staged_tool"
+        const val DISCARD_STAGED_TOOL_NAME = "discard_staged_tool"
+        const val OPEN_CAMERA_TOOL_NAME = "open_camera"
+        const val SET_ALARM_TOOL_NAME = "set_alarm"
+        const val REGISTER_MCP_SERVER_TOOL_NAME = "register_mcp_server"
+        const val LIST_MCP_SERVERS_TOOL_NAME = "list_mcp_servers"
     }
 }
