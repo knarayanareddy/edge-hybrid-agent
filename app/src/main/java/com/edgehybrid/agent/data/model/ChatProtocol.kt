@@ -77,13 +77,13 @@ internal fun ChatMessage.toApiMessage(): ApiChatMessage {
     val serializedContent: kotlinx.serialization.json.JsonElement? = when {
         imageDataUrl != null -> kotlinx.serialization.json.buildJsonArray {
             add(kotlinx.serialization.json.buildJsonObject {
-                put("type", "text")
-                put("text", content ?: "")
+                put("type", kotlinx.serialization.json.JsonPrimitive("text"))
+                put("text", kotlinx.serialization.json.JsonPrimitive(content ?: ""))
             })
             add(kotlinx.serialization.json.buildJsonObject {
-                put("type", "image_url")
+                put("type", kotlinx.serialization.json.JsonPrimitive("image_url"))
                 put("image_url", kotlinx.serialization.json.buildJsonObject {
-                    put("url", imageDataUrl)
+                    put("url", kotlinx.serialization.json.JsonPrimitive(imageDataUrl))
                 })
             })
         }
