@@ -17,6 +17,7 @@ import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.request.preparePost
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.client.statement.execute
@@ -24,8 +25,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.utils.io.readUTF8Line
-import jakarta.inject.Inject
-import jakarta.inject.Singleton
+import javax.inject.Inject
+import javax.inject.Singleton
 import java.io.IOException
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -116,7 +117,7 @@ class CloudInferenceEngine @Inject constructor(
 
         while (true) {
             try {
-                httpClient.post(settings.completionUrl) {
+                httpClient.preparePost(settings.completionUrl) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Text.EventStream)
                     settings.apiKey

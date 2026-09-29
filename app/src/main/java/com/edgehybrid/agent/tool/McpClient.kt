@@ -12,12 +12,12 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
-import io.ktor.client.statement.execute
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.contentType
 import io.ktor.utils.io.readUTF8Line
-import jakarta.inject.Inject
-import jakarta.inject.Singleton
+import javax.inject.Inject
+import javax.inject.Singleton
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -158,7 +158,7 @@ class StreamableHttpMcpClient @Inject constructor(
     }
 
     private suspend fun notifyInitialized() {
-        val response = httpClient.post(settings.endpoint) {
+        val httpResponse: HttpResponse = httpClient.post(settings.endpoint) {
             applyHeaders()
             contentType(ContentType.Application.Json)
             setBody(
@@ -167,17 +167,16 @@ class StreamableHttpMcpClient @Inject constructor(
                     put("method", "notifications/initialized")
                 }
             )
-        }.execute { httpResponse ->
-            if (httpResponse.status.value !in 200..299) {
-                val detail = runCatching {
-                    httpResponse.bodyAsText()
-                }.getOrDefault("").take(256)
+        }
+        if (httpResponse.status.value !in 200..299) {
+            val detail = runCatching {
+                httpResponse.bodyAsText()
+            }.getOrDefault("").take(256)
 
-                throw McpException(
-                    "MCP initialized notification failed with HTTP " +
-                        "${httpResponse.status.value}: $detail"
-                )
-            }
+            throw McpException(
+                "MCP initialized notification failed with HTTP " +
+                    "${httpResponse.status.value}: $detail"
+            )
         }
     }
 
@@ -200,35 +199,36 @@ class StreamableHttpMcpClient @Inject constructor(
             ?: throw McpException("MCP response did not contain a result object")
     }
 
-    private suspend fun exchange(payload: JsonObject): McpHttpResponse =
-        httpClient.post(settings.endpoint) {
+    private suspend fun exchange(payload: JsonObject): McpHttpResponse {
+        val response: HttpResponse = httpClient.post(settings.endpoint) {
             applyHeaders()
             contentType(ContentType.Application.Json)
             setBody(payload)
-        }.execute { response ->
-            if (response.status.value !in 200..299) {
-                val detail = runCatching {
-                    response.bodyAsText()
-                }.getOrDefault("")
-                    .replace('\n', ' ')
-                    .take(512)
-
-                throw McpException(
-                    "MCP request failed with HTTP ${response.status.value}: $detail"
-                )
-            }
-
-            val body = if (response.hasContentType(ContentType.Text.EventStream)) {
-                readEventStreamBody(response)
-            } else {
+        }
+        if (response.status.value !in 200..299) {
+            val detail = runCatching {
                 response.bodyAsText()
-            }
+            }.getOrDefault("")
+                .replace('\n', ' ')
+                .take(512)
 
-            McpHttpResponse(
-                body = body,
-                sessionId = response.headers[MCP_SESSION_HEADER]
+            throw McpException(
+                "MCP request failed with HTTP ${response.status.value}: $detail"
             )
         }
+
+        val isEventStream = response.contentType()?.match(ContentType.Text.EventStream) == true
+        val body = if (isEventStream) {
+            readEventStreamBody(response)
+        } else {
+            response.bodyAsText()
+        }
+
+        return McpHttpResponse(
+            body = body,
+            sessionId = response.headers[MCP_SESSION_HEADER]
+        )
+    }
 
     private fun io.ktor.client.request.HttpRequestBuilder.applyHeaders() {
         header(

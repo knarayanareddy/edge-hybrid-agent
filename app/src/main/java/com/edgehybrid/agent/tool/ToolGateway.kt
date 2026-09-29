@@ -3,8 +3,8 @@ package com.edgehybrid.agent.tool
 import android.util.Log
 import com.edgehybrid.agent.data.model.ModelToolCall
 import com.edgehybrid.agent.data.model.ToolDefinition
-import jakarta.inject.Inject
-import jakarta.inject.Singleton
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put

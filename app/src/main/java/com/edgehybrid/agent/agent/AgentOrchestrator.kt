@@ -5,8 +5,8 @@ import com.edgehybrid.agent.data.model.ChatRoles
 import com.edgehybrid.agent.data.model.ModelToolCall
 import com.edgehybrid.agent.tool.ToolCatalog
 import com.edgehybrid.agent.tool.ToolGateway
-import jakarta.inject.Inject
-import jakarta.inject.Singleton
+import javax.inject.Inject
+import javax.inject.Singleton
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll

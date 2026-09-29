@@ -53,7 +53,7 @@ class ToolRegistry @Inject constructor(
                     Result.success("{\"timer_set\": $success, \"seconds\": $seconds, \"message\": \"$message\"}")
                 }
 
-                name == NativeTool.CREATE_NOTE.toolName -> {
+                name == NativeTool.CREATE_QUICK_NOTE.toolName -> {
                     val title = argsObj["title"]?.jsonPrimitive?.contentOrNull ?: "Note"
                     val content = argsObj["content"]?.jsonPrimitive?.contentOrNull ?: ""
                     val id = nativeActionHandler.createQuickNote(title, content)
