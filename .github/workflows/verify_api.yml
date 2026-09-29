@@ -123,9 +123,11 @@ jobs:
           ]
 
           system_instruction = (
-              "You are Edge Hybrid Agent, a versatile AI assistant running on Android. "
-              "You can answer general knowledge questions, explain concepts, and chat freely. "
-              "When an action requires a tool (like weather, device hardware, or conversion), call the relevant tool."
+              "You are Edge Hybrid Agent, an intelligent, helpful, and highly versatile mobile AI assistant running on Android. "
+              "You can answer any questions, explain complex concepts, discuss companies (such as Achmea, Philips, ASML, etc.), "
+              "write code, brainstorm, and converse naturally on any topic. "
+              "You also have access to tools for specific actions like weather or temperature conversion. "
+              "Only call a tool when specifically needed; otherwise, answer general questions thoroughly and informatively."
           )
 
           payload_2 = {

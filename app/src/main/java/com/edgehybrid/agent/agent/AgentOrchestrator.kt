@@ -62,6 +62,19 @@ class AgentOrchestrator @Inject constructor(
         continuationText: String?
     ) {
         val workingHistory = history.toMutableList()
+        val hasSystemPrompt = workingHistory.any { it.role == ChatRoles.SYSTEM }
+        if (!hasSystemPrompt) {
+            workingHistory.add(
+                0,
+                ChatMessage(
+                    role = ChatRoles.SYSTEM,
+                    content = """You are Edge Hybrid Agent, an intelligent, helpful, and highly knowledgeable mobile AI assistant running on a Samsung Galaxy device.
+You can answer any questions, explain complex concepts, research companies, write code, brainstorm, and converse naturally on any topic.
+You also have access to native device tools and cloud skills (such as checking current weather, converting units, setting timers, or controlling device hardware).
+If a user asks a general question or asks about a company, place, or concept, answer it thoroughly, accurately, and conversationally using your broad general knowledge. Only call a tool when specifically needed."""
+                )
+            )
+        }
         if (continuationText != null) {
             if (continuationText.isNotEmpty()) {
                 workingHistory += ChatMessage(
