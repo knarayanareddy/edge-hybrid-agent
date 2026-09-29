@@ -17,13 +17,15 @@ fun quoted(value: String): String =
 
 val cloudBaseUrl = configurationValue(
     name = "EDGE_CLOUD_BASE_URL",
-    defaultValue = "https://api.openai.com/v1"
+    defaultValue = "https://openrouter.ai/api/v1"
 )
 val cloudApiKey = configurationValue("EDGE_CLOUD_API_KEY")
 val cloudModel = configurationValue(
     name = "EDGE_CLOUD_MODEL",
-    defaultValue = "gpt-4.1-mini"
+    defaultValue = "google/gemini-2.5-flash"
 )
+val typesafeApiKey = configurationValue("EDGE_TYPESAFE_API_KEY")
+val geminiApiKey = configurationValue("EDGE_GEMINI_API_KEY")
 val mcpEndpoint = configurationValue("EDGE_MCP_ENDPOINT")
 val mcpToken = configurationValue("EDGE_MCP_BEARER_TOKEN")
 val mcpEnabled = configurationValue(
@@ -47,6 +49,8 @@ android {
         buildConfigField("String", "CLOUD_BASE_URL", quoted(cloudBaseUrl))
         buildConfigField("String", "CLOUD_API_KEY", quoted(cloudApiKey))
         buildConfigField("String", "CLOUD_MODEL", quoted(cloudModel))
+        buildConfigField("String", "TYPESAFE_API_KEY", quoted(typesafeApiKey))
+        buildConfigField("String", "GEMINI_API_KEY", quoted(geminiApiKey))
         buildConfigField("String", "MCP_ENDPOINT", quoted(mcpEndpoint))
         buildConfigField("String", "MCP_BEARER_TOKEN", quoted(mcpToken))
         buildConfigField("boolean", "MCP_ENABLED", mcpEnabled.toString())
@@ -109,6 +113,7 @@ dependencies {
     ksp(libs.hilt.compiler)
 
     implementation(libs.androidx.webkit)
+    implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

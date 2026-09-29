@@ -28,22 +28,40 @@ class SecureKeyStore @Inject constructor(
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    fun getOpenRouterApiKey(): String = prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: ""
+    fun getOpenRouterApiKey(): String {
+        val saved = prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: ""
+        if (saved.isNotBlank()) return saved
+        return com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY.takeIf { it.isNotBlank() } ?: ""
+    }
     fun setOpenRouterApiKey(key: String) = prefs.edit().putString(KEY_OPENROUTER_API_KEY, key.trim()).apply()
 
-    fun getTypeSafeApiKey(): String = prefs.getString(KEY_TYPESAFE_API_KEY, "") ?: ""
+    fun getTypeSafeApiKey(): String {
+        val saved = prefs.getString(KEY_TYPESAFE_API_KEY, "") ?: ""
+        if (saved.isNotBlank()) return saved
+        return com.edgehybrid.agent.BuildConfig.TYPESAFE_API_KEY.takeIf { it.isNotBlank() } ?: ""
+    }
     fun setTypeSafeApiKey(key: String) = prefs.edit().putString(KEY_TYPESAFE_API_KEY, key.trim()).apply()
 
-    fun getGeminiApiKey(): String = prefs.getString(KEY_GEMINI_API_KEY, "") ?: ""
+    fun getGeminiApiKey(): String {
+        val saved = prefs.getString(KEY_GEMINI_API_KEY, "") ?: ""
+        if (saved.isNotBlank()) return saved
+        return com.edgehybrid.agent.BuildConfig.GEMINI_API_KEY.takeIf { it.isNotBlank() } ?: ""
+    }
     fun setGeminiApiKey(key: String) = prefs.edit().putString(KEY_GEMINI_API_KEY, key.trim()).apply()
 
-    fun getSelectedCloudModel(): String =
-        prefs.getString(KEY_SELECTED_CLOUD_MODEL, DEFAULT_CLOUD_MODEL) ?: DEFAULT_CLOUD_MODEL
+    fun getSelectedCloudModel(): String {
+        val saved = prefs.getString(KEY_SELECTED_CLOUD_MODEL, "") ?: ""
+        if (saved.isNotBlank()) return saved
+        return com.edgehybrid.agent.BuildConfig.CLOUD_MODEL.takeIf { it.isNotBlank() } ?: DEFAULT_CLOUD_MODEL
+    }
     fun setSelectedCloudModel(modelId: String) =
         prefs.edit().putString(KEY_SELECTED_CLOUD_MODEL, modelId.trim()).apply()
 
-    fun getCustomEndpoint(): String =
-        prefs.getString(KEY_CUSTOM_ENDPOINT, DEFAULT_OPENROUTER_ENDPOINT) ?: DEFAULT_OPENROUTER_ENDPOINT
+    fun getCustomEndpoint(): String {
+        val saved = prefs.getString(KEY_CUSTOM_ENDPOINT, "") ?: ""
+        if (saved.isNotBlank()) return saved
+        return com.edgehybrid.agent.BuildConfig.CLOUD_BASE_URL.takeIf { it.isNotBlank() } ?: DEFAULT_OPENROUTER_ENDPOINT
+    }
     fun setCustomEndpoint(url: String) =
         prefs.edit().putString(KEY_CUSTOM_ENDPOINT, url.trim()).apply()
 

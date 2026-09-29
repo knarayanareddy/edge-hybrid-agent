@@ -1,0 +1,85 @@
+name: Package Edge Hybrid Agent APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Default Cloud Model"
+        required: false
+        default: "google/gemini-2.5-flash"
+      base_url:
+        description: "Default API Base URL"
+        required: false
+        default: "https://openrouter.ai/api/v1"
+
+jobs:
+  build-apk:
+    name: Build & Package Android APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Ensure Gradle Wrapper
+        run: |
+          if [ ! -f ./gradlew ]; then
+            echo "Generating Gradle wrapper..."
+            gradle wrapper --gradle-version 8.9
+          fi
+          chmod +x ./gradlew
+
+      - name: Build Debug APK
+        env:
+          EDGE_CLOUD_API_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY_1 }}
+          EDGE_TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          EDGE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EDGE_CLOUD_BASE_URL: ${{ github.event.inputs.base_url || 'https://openrouter.ai/api/v1' }}
+          EDGE_CLOUD_MODEL: ${{ github.event.inputs.model || 'google/gemini-2.5-flash' }}
+        run: |
+          echo "Building EdgeHybridAgent Debug APK with pre-configured API keys..."
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK Generated
+        run: |
+          ls -lh app/build/outputs/apk/debug/
+          cp app/build/outputs/apk/debug/app-debug.apk ./EdgeHybridAgent-debug.apk
+
+      - name: Upload APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EdgeHybridAgent-debug-apk
+          path: ./EdgeHybridAgent-debug.apk
+          retention-days: 14
+
+      - name: Publish Direct Download GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="v1.0.0-apk"
+          gh release delete "$TAG_NAME" --yes 2>/dev/null || true
+          git tag -d "$TAG_NAME" 2>/dev/null || true
+          git push origin ":refs/tags/$TAG_NAME" 2>/dev/null || true
+          gh release create "$TAG_NAME" ./EdgeHybridAgent-debug.apk \
+            --title "Edge Hybrid Agent v1.0.0 (Samsung S23 Ultra APK)" \
+            --notes "### Edge Hybrid Agent — Android Test Build
+            - **Target Device:** Samsung Galaxy S23 Ultra (API 34/35)
+            - **Pre-Configured Provider:** OpenRouter / Gemini 2.5 Flash
+            - **Security:** Keys encrypted on-device via Android Keystore (AES-256-GCM)
+            - **Features:** S Pen Air Actions, Multimodal Screen Context, JEV Risk Gate, Headless JS Sandbox, Local RAG
+            
+            **Installation on phone:**
+            1. Download \`EdgeHybridAgent-debug.apk\` directly on your S23 Ultra.
+            2. Tap the file in My Files / Downloads to install.
+            3. Grant notification & background permissions when prompted."
