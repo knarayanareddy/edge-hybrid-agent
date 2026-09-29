@@ -41,6 +41,17 @@ jobs:
           fi
           chmod +x ./gradlew
 
+      - name: Verify Live Cloud API & Tool Calling
+        env:
+          OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY_1 }}
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python3 verify_live_api.py
+
+      - name: Run Full Test Suite
+        run: |
+          echo "Running unit & integration test suites..."
+          ./gradlew test --no-daemon --stacktrace
 
       - name: Build Debug APK
         env:
