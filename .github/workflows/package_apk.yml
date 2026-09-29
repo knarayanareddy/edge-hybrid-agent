@@ -43,7 +43,7 @@ jobs:
 
       - name: Verify Live Cloud API & Tool Calling
         env:
-          OPENROUTER_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY_1 }}
+          OPENROUTER_KEYS: "${{ secrets.OPENROUTER_API_KEY }}|${{ secrets.OPENROUTER_API_KEY_1 }}|${{ secrets.OPENROUTER_API_KEY_2 }}|${{ secrets.OPENROUTER_API_KEY_3 }}|${{ secrets.OPENROUTER_API_KEY_4 }}|${{ secrets.OPENROUTER_API_KEY_5 }}|${{ secrets.OPENROUTER_API_KEY_6 }}"
           GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python3 verify_live_api.py
@@ -55,7 +55,7 @@ jobs:
 
       - name: Build Debug APK
         env:
-          EDGE_CLOUD_API_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY_1 }}
+          EDGE_CLOUD_API_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY_1 || secrets.OPENROUTER_API_KEY_2 || secrets.OPENROUTER_API_KEY_3 || secrets.OPENROUTER_API_KEY_4 || secrets.OPENROUTER_API_KEY_5 || secrets.OPENROUTER_API_KEY_6 }}
           EDGE_TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
           EDGE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
