@@ -286,16 +286,18 @@ class AgentOrchestratorTest {
             throw IllegalStateException("MCP is disabled in this test")
     }
 
-    private fun toolCall(
-        id: String,
-        name: String,
-        arguments: kotlinx.serialization.json.JsonObject
-    ): ModelToolCall =
-        ModelToolCall(
-            id = id,
-            function = ToolCallFunction(
-                name = name,
-                arguments = arguments
+    companion object {
+        fun toolCall(
+            id: String,
+            name: String,
+            arguments: kotlinx.serialization.json.JsonObject
+        ): ModelToolCall =
+            ModelToolCall(
+                id = id,
+                function = ToolCallFunction(
+                    name = name,
+                    arguments = arguments
+                )
             )
-        )
+    }
 }

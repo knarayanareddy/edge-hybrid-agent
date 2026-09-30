@@ -84,7 +84,7 @@ class CloudInferenceEngine @Inject constructor(
     private val policy: AgentPolicy,
     private val clock: MonotonicClock,
     private val suspendDelay: SuspendDelay,
-    private val keyStore: com.edgehybrid.agent.data.local.SecureKeyStore
+    private val keyStore: com.edgehybrid.agent.data.local.SecureKeyStore? = null
 ) : InferenceEngine {
 
     override fun streamChat(
@@ -94,7 +94,7 @@ class CloudInferenceEngine @Inject constructor(
         val startedAtNanos = clock.nowNanos()
         val accumulator = TurnAccumulator(clock, startedAtNanos)
         val hasTools = tools.isNotEmpty()
-        val effectiveModel = keyStore.getSelectedCloudModel().takeIf { it.isNotBlank() } ?: settings.model
+        val effectiveModel = keyStore?.getSelectedCloudModel()?.takeIf { it.isNotBlank() } ?: settings.model
         val request = ChatCompletionRequest(
             model = effectiveModel,
             messages = messages.map(ChatMessage::toApiMessage),
@@ -117,8 +117,8 @@ class CloudInferenceEngine @Inject constructor(
         onDelta: suspend (String) -> Unit
     ) {
         var retryCount = 0
-        val effectiveApiKey = keyStore.getOpenRouterApiKey().takeIf { it.isNotBlank() } ?: settings.apiKey
-        val effectiveBaseUrl = keyStore.getCustomEndpoint().takeIf { it.isNotBlank() } ?: settings.baseUrl
+        val effectiveApiKey = keyStore?.getOpenRouterApiKey()?.takeIf { it.isNotBlank() } ?: settings.apiKey
+        val effectiveBaseUrl = keyStore?.getCustomEndpoint()?.takeIf { it.isNotBlank() } ?: settings.baseUrl
         val effectiveUrl = "${effectiveBaseUrl.trimEnd('/')}/chat/completions"
 
         while (true) {
