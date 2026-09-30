@@ -190,6 +190,10 @@ jobs:
           fi
 
       - name: Run instrumentation tests
+        env:
+          EDGE_TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          EDGE_CLOUD_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          EDGE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
 
       - name: Upload instrumentation report

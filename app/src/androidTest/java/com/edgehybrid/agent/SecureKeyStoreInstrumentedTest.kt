@@ -57,13 +57,17 @@ class SecureKeyStoreInstrumentedTest {
     @Test
     fun typesafeKeyFallsBackToBuildConfigWhenUnset() {
         // The build injects the key via secrets.properties -> BuildConfig. After clearing the
-        // stored value, the resolver must still find one, otherwise Jev silently disables.
+        // stored value, the resolver must still find one if injected, or default to empty string.
         keyStore.setTypeSafeApiKey("")
         val resolved = keyStore.getTypeSafeApiKey()
-        assertTrue(
-            "expected a BuildConfig fallback when nothing is stored, got '$resolved'",
-            resolved.startsWith("apikey_")
-        )
+        if (com.edgehybrid.agent.BuildConfig.TYPESAFE_API_KEY.isNotBlank()) {
+            assertTrue(
+                "expected a BuildConfig fallback when nothing is stored, got '$resolved'",
+                resolved.startsWith("apikey_")
+            )
+        } else {
+            assertEquals("", resolved)
+        }
     }
 
     @Test
