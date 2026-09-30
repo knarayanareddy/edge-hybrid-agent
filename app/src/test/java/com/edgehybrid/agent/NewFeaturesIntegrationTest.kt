@@ -2,6 +2,8 @@ package com.edgehybrid.agent
 
 import com.edgehybrid.agent.agent.AgentLoop
 import com.edgehybrid.agent.agent.AgentStreamEvent
+import com.edgehybrid.agent.agent.GenerationTelemetry
+import com.edgehybrid.agent.agent.TokenUsage
 import com.edgehybrid.agent.data.local.ChatDao
 import com.edgehybrid.agent.data.local.ChatMessageEntity
 import com.edgehybrid.agent.data.local.ChatSessionEntity
@@ -9,6 +11,7 @@ import com.edgehybrid.agent.data.model.ChatMessage
 import com.edgehybrid.agent.ui.chat.ChatMessageRole
 import com.edgehybrid.agent.ui.chat.ChatViewModel
 import com.edgehybrid.agent.ui.chat.MainDispatcherRule
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -22,6 +25,7 @@ import org.junit.Rule
 import org.junit.Test
 import java.util.UUID
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class NewFeaturesIntegrationTest {
 
     @get:Rule
@@ -97,6 +101,8 @@ class NewFeaturesIntegrationTest {
         val fakeDao = FakeChatDao()
         val agentLoop = SimpleEchoAgentLoop()
         val viewModel = ChatViewModel(agentLoop = agentLoop, keyStore = null, chatDao = fakeDao)
+        // Drain init{} coroutines: observeSessions + loadChatHistory(DEFAULT_SESSION_ID)
+        advanceUntilIdle()
 
         // 1. Initial default session created
         val session1Id = viewModel.uiState.value.currentSessionId

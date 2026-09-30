@@ -6,6 +6,7 @@ import com.edgehybrid.agent.agent.GenerationTelemetry
 import com.edgehybrid.agent.agent.TokenUsage
 import com.edgehybrid.agent.data.model.ChatMessage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -22,6 +23,7 @@ import org.junit.Test
 import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
 
     @get:Rule
@@ -31,6 +33,8 @@ class ChatViewModelTest {
     fun `mid stream network failure shows recovery chip and retry continues same bubble`() = runTest {
         val agentLoop = RecoveringAgentLoop()
         val viewModel = ChatViewModel(agentLoop)
+        // Drain init{} coroutines (loadChatHistory with null chatDao is a no-op, but drain anyway)
+        advanceUntilIdle()
 
         viewModel.send("What's the weather in Tokyo?")
         advanceUntilIdle()

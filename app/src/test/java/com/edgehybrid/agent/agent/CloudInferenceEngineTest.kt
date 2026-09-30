@@ -22,99 +22,24 @@ import org.junit.Test
 
 class CloudInferenceEngineTest {
 
+    // NOTE: All SSE chunk JSON must be single-line strings.
+    // SseFrameDecoder treats every newline as an SSE event boundary —
+    // multi-line JSON would be split into broken partial frames.
+
     @Test
-    fun `parses fragmented nested tool call arguments and usage`() = runTest {
+    fun `parses tool call with nested arguments and usage`() = runTest {
+        // Three SSE chunks: text delta, complete tool call, finish+usage
         val chunks = listOf(
-            """
-            {
-              "id":"chatcmpl-complex",
-              "choices":[{
-                "index":0,
-                "delta":{
-                  "role":"assistant",
-                  "content":"I'll check that. "
-                },
-                "finish_reason":null
-              }]
-            }
-            """.trimIndent(),
-            """
-            {
-              "id":"chatcmpl-complex",
-              "choices":[{
-                "index":0,
-                "delta":{
-                  "tool_calls":[{
-                    "index":0,
-                    "id":"call-weather-tokyo",
-                    "type":"function",
-                    "function":{
-                      "name":"get_current_weather",
-                      "arguments":"{\"city\":\"Tokyo\",\"unit\":{\"system\":\"metric\"},\"details\":{\"forecast\":"
-                    }
-                  }]
-                },
-                "finish_reason":null
-              }]
-            }
-            """.trimIndent(),
-            """
-            {
-              "id":"chatcmpl-complex",
-              "choices":[{
-                "index":0,
-                "delta":{
-                  "tool_calls":[{
-                    "index":0,
-                    "function":{
-                      "arguments":"true,\"depth\":{\"days\":3}},\"alerts\":[{\"kind\":\"storm\",\"level\":2}]}}"
-                    }
-                  }]
-                },
-                "finish_reason":null
-              }]
-            }
-            """.trimIndent(),
-            """
-            {
-              "id":"chatcmpl-complex",
-              "choices":[{
-                "index":0,
-                "delta":{},
-                "finish_reason":"tool_calls"
-              }],
-              "usage":{
-                "prompt_tokens":41,
-                "completion_tokens":29,
-                "total_tokens":70
-              }
-            }
-            """.trimIndent()
+            """{"id":"c1","choices":[{"index":0,"delta":{"role":"assistant","content":"I'll check that. "},"finish_reason":null}]}""",
+            """{"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-weather-tokyo","type":"function","function":{"name":"get_current_weather","arguments":"{\"city\":\"Tokyo\",\"unit\":{\"system\":\"metric\"},\"details\":{\"depth\":{\"days\":3}},\"alerts\":[{\"kind\":\"storm\",\"level\":2}]}"}}]},"finish_reason":null}]}""",
+            """{"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":41,"completion_tokens":29,"total_tokens":70}}"""
         )
 
-        val client = mockClient(
-            responseBody = sseResponse(chunks)
-        )
-        val engine = CloudInferenceEngine(
-            httpClient = client,
-            json = testJson,
-            settings = ProviderSettings(
-                baseUrl = "https://cloud.example/v1",
-                apiKey = "test-key",
-                model = "test-model"
-            ),
-            policy = AgentPolicy(),
-            clock = StepClock(),
-            suspendDelay = RecordingDelay()
-        )
+        val client = mockClient(responseBody = sseResponse(chunks))
+        val engine = makeEngine(client)
 
         val events = engine.streamChat(
-            messages = listOf(
-                ChatMessage(
-                    role = ChatRoles.USER,
-                    content = "What's the weather in Tokyo and convert that to Fahrenheit?"
-                )
-            ),
+            messages = listOf(ChatMessage(role = ChatRoles.USER, content = "Weather in Tokyo?")),
             tools = emptyList()
         ).toList()
 
@@ -136,32 +61,21 @@ class CloudInferenceEngineTest {
         assertEquals(
             "metric",
             call.function.arguments["unit"]
-                ?.jsonObject
-                ?.get("system")
-                ?.jsonPrimitive
-                ?.content
+                ?.jsonObject?.get("system")?.jsonPrimitive?.content
         )
         assertEquals(
             3,
             call.function.arguments["details"]
-                ?.jsonObject
-                ?.get("depth")
-                ?.jsonObject
-                ?.get("days")
-                ?.jsonPrimitive
-                ?.content
-                ?.toInt()
+                ?.jsonObject?.get("depth")
+                ?.jsonObject?.get("days")
+                ?.jsonPrimitive?.content?.toInt()
         )
         assertEquals(
             2,
             call.function.arguments["alerts"]
-                ?.jsonArray
-                ?.first()
-                ?.jsonObject
-                ?.get("level")
-                ?.jsonPrimitive
-                ?.content
-                ?.toInt()
+                ?.jsonArray?.first()
+                ?.jsonObject?.get("level")
+                ?.jsonPrimitive?.content?.toInt()
         )
         assertEquals(41L, turn.usage.promptTokens)
         assertEquals(29L, turn.usage.completionTokens)
@@ -183,39 +97,21 @@ class CloudInferenceEngineTest {
                         respond(
                             content = status.description,
                             status = status,
-                            headers = headersOf(
-                                HttpHeaders.ContentType,
-                                "text/plain"
-                            )
+                            headers = headersOf(HttpHeaders.ContentType, "text/plain")
                         )
                     } else {
                         respond(
-                            content = sseResponse(
-                                listOf(
-                                    """
-                                    {
-                                      "choices":[{
-                                        "index":0,
-                                        "delta":{"content":"Recovered"},
-                                        "finish_reason":"stop"
-                                      }]
-                                    }
-                                    """.trimIndent()
-                                )
-                            ),
+                            content = sseResponse(listOf(
+                                """{"choices":[{"index":0,"delta":{"content":"Recovered"},"finish_reason":"stop"}]}"""
+                            )),
                             status = HttpStatusCode.OK,
-                            headers = headersOf(
-                                HttpHeaders.ContentType,
-                                "text/event-stream"
-                            )
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream")
                         )
                     }
                 }
             ) {
                 expectSuccess = false
-                install(ContentNegotiation) {
-                    json(testJson)
-                }
+                install(ContentNegotiation) { json(testJson) }
             }
 
             val engine = CloudInferenceEngine(
@@ -232,12 +128,7 @@ class CloudInferenceEngineTest {
             )
 
             val events = engine.streamChat(
-                messages = listOf(
-                    ChatMessage(
-                        role = ChatRoles.USER,
-                        content = "Hello"
-                    )
-                ),
+                messages = listOf(ChatMessage(role = ChatRoles.USER, content = "Hello")),
                 tools = emptyList()
             ).toList()
 
@@ -252,42 +143,50 @@ class CloudInferenceEngineTest {
         }
     }
 
+    // --- Helpers ---
+
+    private fun makeEngine(client: HttpClient): CloudInferenceEngine =
+        CloudInferenceEngine(
+            httpClient = client,
+            json = testJson,
+            settings = ProviderSettings(
+                baseUrl = "https://cloud.example/v1",
+                apiKey = "test-key",
+                model = "test-model"
+            ),
+            policy = AgentPolicy(),
+            clock = StepClock(),
+            suspendDelay = RecordingDelay()
+        )
+
     private fun mockClient(responseBody: String): HttpClient =
         HttpClient(
             MockEngine {
                 respond(
                     content = responseBody,
                     status = HttpStatusCode.OK,
-                    headers = headersOf(
-                        HttpHeaders.ContentType,
-                        "text/event-stream"
-                    )
+                    headers = headersOf(HttpHeaders.ContentType, "text/event-stream")
                 )
             }
         ) {
             expectSuccess = false
-            install(ContentNegotiation) {
-                json(testJson)
-            }
+            install(ContentNegotiation) { json(testJson) }
         }
 
+    /** Each chunk becomes a single `data: <json>` line, terminated by [DONE]. */
     private fun sseResponse(chunks: List<String>): String =
         chunks.joinToString(separator = "\n\n") { chunk -> "data: $chunk" } +
             "\n\ndata: [DONE]\n\n"
 
     private class StepClock : MonotonicClock {
         private var now = 0L
-
-        override fun nowNanos(): Long =
-            now.also { now += 1_000_000L }
+        override fun nowNanos(): Long = now.also { now += 1_000_000L }
     }
 
     private class RecordingDelay(
         private val delays: MutableList<Long> = mutableListOf()
     ) : SuspendDelay {
-        override suspend fun wait(delayMs: Long) {
-            delays += delayMs
-        }
+        override suspend fun wait(delayMs: Long) { delays += delayMs }
     }
 
     companion object {

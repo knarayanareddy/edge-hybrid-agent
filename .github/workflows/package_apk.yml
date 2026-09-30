@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: "17"
@@ -51,7 +51,15 @@ jobs:
       - name: Run Full Test Suite
         run: |
           echo "Running unit & integration test suites..."
-          ./gradlew test --no-daemon --stacktrace
+          ./gradlew test --no-daemon --stacktrace --continue
+
+      - name: Upload Test Reports on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: app/build/reports/tests/
+          retention-days: 7
 
       - name: Build Debug APK
         env:
