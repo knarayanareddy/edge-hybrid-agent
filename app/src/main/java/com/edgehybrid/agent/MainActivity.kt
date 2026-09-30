@@ -7,20 +7,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import com.edgehybrid.agent.core.mcp.McpClient
 import com.edgehybrid.agent.core.tools.SkillLoader
@@ -33,10 +25,8 @@ import com.edgehybrid.agent.ui.theme.EdgeHybridTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
-import com.edgehybrid.agent.ui.canvas.CanvasInspectorScreen
 import com.edgehybrid.agent.ui.components.AuraBottomNavigationBar
 import com.edgehybrid.agent.ui.components.AuraHeader
-import com.edgehybrid.agent.ui.library.LibraryMemoryScreen
 import com.edgehybrid.agent.ui.theme.AuraTokens
 
 @AndroidEntryPoint
@@ -70,6 +60,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Tab indices */
+private const val TAB_CHAT     = 0
+private const val TAB_SKILLS   = 1
+private const val TAB_SETTINGS = 2
+
 @Composable
 fun MainAppScreen(
     keyStore: SecureKeyStore,
@@ -77,20 +72,20 @@ fun MainAppScreen(
     skillLoader: SkillLoader,
     mcpClient: McpClient
 ) {
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(TAB_CHAT) }
 
     val tabTitle = when (selectedTab) {
-        0 -> "Chats"
-        1 -> "Canvas"
-        2 -> "Library"
-        else -> "Settings"
+        TAB_CHAT     -> "Chat"
+        TAB_SKILLS   -> "Skills & Tools"
+        TAB_SETTINGS -> "Settings"
+        else         -> "Chat"
     }
 
     Scaffold(
         topBar = {
             AuraHeader(
                 title = tabTitle,
-                onProfileClick = { selectedTab = 3 }
+                onProfileClick = { selectedTab = TAB_SETTINGS }
             )
         },
         bottomBar = {
@@ -107,16 +102,18 @@ fun MainAppScreen(
                 .padding(innerPadding)
         ) {
             when (selectedTab) {
-                0 -> ChatRoute(onOpenSettings = { selectedTab = 3 })
-                1 -> CanvasInspectorScreen(onNavigateBack = { selectedTab = 0 })
-                2 -> LibraryMemoryScreen(
-                    lessonsDao = lessonsDao,
-                    onNavigateBack = { selectedTab = 0 }
+                TAB_CHAT -> ChatRoute(onOpenSettings = { selectedTab = TAB_SETTINGS })
+
+                TAB_SKILLS -> SkillsScreen(
+                    skillLoader = skillLoader,
+                    mcpClient = mcpClient,
+                    onNavigateBack = { selectedTab = TAB_CHAT }
                 )
-                3 -> SettingsScreen(
+
+                TAB_SETTINGS -> SettingsScreen(
                     keyStore = keyStore,
                     lessonsDao = lessonsDao,
-                    onNavigateBack = { selectedTab = 0 }
+                    onNavigateBack = { selectedTab = TAB_CHAT }
                 )
             }
         }

@@ -15,26 +15,32 @@ import kotlinx.serialization.json.*
 import java.util.UUID
 
 /**
- * OpenRouter-compatible cloud inference engine.
+ * Hybrid cloud inference engine.
+ *
+ * Supports two providers out of the box:
+ *  - **OpenRouter** (default): Bearer token auth, proxies many models.
+ *  - **Google AI Studio**: Direct Gemini via generativelanguage.googleapis.com/v1beta/openai.
+ *    Key is passed as a `?key=` query parameter (not Bearer) per GAS OpenAI-compat docs.
  *
  * Handles:
  * - SSE (Server-Sent Events) token streaming
  * - Tool/function calling with OpenAI-compatible schema
  * - Multimodal payloads (text + base64 images)
  * - Automatic retry on transient failures
- *
- * Compatible with: OpenRouter, OpenAI, Groq, Google AI Studio,
- * and any provider exposing /v1/chat/completions.
  */
 class CloudInferenceEngine(
     private val apiKey: String,
     private val baseUrl: String = "https://openrouter.ai/api/v1",
-    private val modelId: String = "google/gemini-2.5-flash",
+    private val modelId: String = "google/gemini-3.8-flash",
     private val appName: String = "EdgeHybridAgent",
 ) : InferenceEngine {
 
     override val engineName: String = "Cloud ($modelId)"
     override val requiresNetwork: Boolean = true
+
+    /** True when talking directly to Google AI Studio (key goes as query param, not Bearer). */
+    private val isGoogleAiStudio: Boolean
+        get() = baseUrl.contains("generativelanguage.googleapis.com")
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -62,9 +68,12 @@ class CloudInferenceEngine(
         val requestBody = buildRequestBody(messages, tools, config, stream = true)
 
         try {
-            client.preparePost("$baseUrl/chat/completions") {
+            val url = if (isGoogleAiStudio) "$baseUrl/chat/completions?key=$apiKey"
+                      else "$baseUrl/chat/completions"
+
+            client.preparePost(url) {
                 contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $apiKey")
+                if (!isGoogleAiStudio) header("Authorization", "Bearer $apiKey")
                 header("HTTP-Referer", "https://edgehybridagent.app")
                 header("X-Title", appName)
                 setBody(requestBody.toString())
@@ -152,9 +161,12 @@ class CloudInferenceEngine(
     ): CompletionResult {
         val requestBody = buildRequestBody(messages, tools, config, stream = false)
 
-        val response = client.post("$baseUrl/chat/completions") {
+        val response = client.post(
+            if (isGoogleAiStudio) "$baseUrl/chat/completions?key=$apiKey"
+            else "$baseUrl/chat/completions"
+        ) {
             contentType(ContentType.Application.Json)
-            header("Authorization", "Bearer $apiKey")
+            if (!isGoogleAiStudio) header("Authorization", "Bearer $apiKey")
             header("HTTP-Referer", "https://edgehybridagent.app")
             header("X-Title", appName)
             setBody(requestBody.toString())

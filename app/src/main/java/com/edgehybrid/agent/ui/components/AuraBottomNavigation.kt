@@ -15,12 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Draw
-import androidx.compose.material.icons.filled.FolderCopy
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Draw
-import androidx.compose.material.icons.outlined.FolderCopy
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -42,11 +40,11 @@ data class AuraNavDestination(
     val unselectedIcon: ImageVector
 )
 
+/** 3 functional tabs — Chat, Skills/Tools, Settings */
 val AuraDestinations = listOf(
-    AuraNavDestination("Chats", Icons.Filled.ChatBubble, Icons.Outlined.ChatBubbleOutline),
-    AuraNavDestination("Canvas", Icons.Filled.Draw, Icons.Outlined.Draw),
-    AuraNavDestination("Library", Icons.Filled.FolderCopy, Icons.Outlined.FolderCopy),
-    AuraNavDestination("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
+    AuraNavDestination("Chat",     Icons.Filled.ChatBubble,      Icons.Outlined.ChatBubbleOutline),
+    AuraNavDestination("Skills",   Icons.Filled.Extension,       Icons.Outlined.Extension),
+    AuraNavDestination("Settings", Icons.Filled.Settings,        Icons.Outlined.Settings),
 )
 
 @Composable
@@ -87,7 +85,7 @@ fun AuraBottomNavigationBar(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { onTabSelected(index) }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {

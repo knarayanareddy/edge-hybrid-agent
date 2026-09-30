@@ -117,20 +117,45 @@ class CloudInferenceEngine @Inject constructor(
         onDelta: suspend (String) -> Unit
     ) {
         var retryCount = 0
-        val effectiveApiKey = keyStore?.getOpenRouterApiKey()?.takeIf { it.isNotBlank() } ?: settings.apiKey
-        val effectiveBaseUrl = keyStore?.getCustomEndpoint()?.takeIf { it.isNotBlank() } ?: settings.baseUrl
-        val effectiveUrl = "${effectiveBaseUrl.trimEnd('/')}/chat/completions"
+
+        // Resolve provider, key and URL from SecureKeyStore (overrides build-time config)
+        val provider = keyStore?.getPreferredProvider()
+            ?: com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER
+        val isGoogleAiStudio =
+            provider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO
+
+        val effectiveApiKey: String? = if (isGoogleAiStudio) {
+            keyStore?.getGeminiApiKey()?.takeIf { it.isNotBlank() }
+        } else {
+            keyStore?.getOpenRouterApiKey()?.takeIf { it.isNotBlank() } ?: settings.apiKey
+        }
+
+        val effectiveBaseUrl: String = if (isGoogleAiStudio) {
+            com.edgehybrid.agent.data.local.SecureKeyStore.DEFAULT_GOOGLE_AI_STUDIO_ENDPOINT
+        } else {
+            keyStore?.getCustomEndpoint()?.takeIf { it.isNotBlank() } ?: settings.baseUrl
+        }
+
+        // For Google AI Studio the key goes as a query param; for others it's a Bearer header.
+        val effectiveUrl: String = if (isGoogleAiStudio && !effectiveApiKey.isNullOrBlank()) {
+            "${effectiveBaseUrl.trimEnd('/')}/chat/completions?key=$effectiveApiKey"
+        } else {
+            "${effectiveBaseUrl.trimEnd('/')}/chat/completions"
+        }
 
         while (true) {
             try {
                 httpClient.preparePost(effectiveUrl) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Text.EventStream)
-                    effectiveApiKey
-                        ?.takeIf(String::isNotBlank)
-                        ?.let { key ->
-                            header(HttpHeaders.Authorization, "Bearer $key")
-                        }
+                    // Only send Bearer for non-GAS providers
+                    if (!isGoogleAiStudio) {
+                        effectiveApiKey
+                            ?.takeIf(String::isNotBlank)
+                            ?.let { key ->
+                                header(HttpHeaders.Authorization, "Bearer $key")
+                            }
+                    }
                     setBody(request)
                 }.execute { response ->
                     val statusCode = response.status.value

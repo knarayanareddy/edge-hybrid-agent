@@ -1,6 +1,8 @@
 package com.edgehybrid.agent.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -39,6 +42,9 @@ fun SettingsScreen(
     var selectedModel by remember { mutableStateOf(keyStore.getSelectedCloudModel()) }
     var jevEnabled by remember { mutableStateOf(keyStore.isJevRoutingEnabled()) }
     var localFallbackEnabled by remember { mutableStateOf(keyStore.isLocalFallbackEnabled()) }
+
+    /** "openrouter" | "google_ai_studio" */
+    var preferredProvider by remember { mutableStateOf(keyStore.getPreferredProvider()) }
 
     var lessons by remember { mutableStateOf<List<LessonEntity>>(emptyList()) }
     var savedSnackbar by remember { mutableStateOf(false) }
@@ -78,7 +84,104 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+
+            // ── Provider Picker ────────────────────────────────────────────
             item {
+                Text(
+                    text = "Inference Provider",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Choose where your prompts are sent",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            item {
+                ProviderSegmentedButtons(
+                    selectedProvider = preferredProvider,
+                    onProviderSelected = { preferredProvider = it }
+                )
+            }
+
+            // ── Contextual model hint ──────────────────────────────────────
+            item {
+                if (preferredProvider == SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "Google AI Studio mode",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                "Calls generativelanguage.googleapis.com directly using your Gemini API key — no OpenRouter credits needed. " +
+                                "Recommended model: gemini-2.5-flash or gemini-2.0-flash-exp",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "OpenRouter mode",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                "Routes to 300+ models via openrouter.ai. Requires credits. " +
+                                "Default model: google/gemini-3.8-flash",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Model ID ──────────────────────────────────────────────────
+            item {
+                OutlinedTextField(
+                    value = selectedModel,
+                    onValueChange = { selectedModel = it },
+                    label = { Text("Model ID") },
+                    placeholder = {
+                        Text(
+                            if (preferredProvider == SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO)
+                                "e.g. gemini-2.5-flash"
+                            else
+                                "e.g. google/gemini-3.8-flash"
+                        )
+                    },
+                    supportingText = {
+                        Text(
+                            if (preferredProvider == SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO)
+                                "No provider prefix for Google AI Studio models"
+                            else
+                                "Use provider/model-name format for OpenRouter"
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // ── API Credentials ───────────────────────────────────────────
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                 Text(
                     text = "API Credentials (Encrypted on Device)",
                     fontSize = 16.sp,
@@ -89,9 +192,22 @@ fun SettingsScreen(
 
             item {
                 OutlinedTextField(
+                    value = geminiKey,
+                    onValueChange = { geminiKey = it },
+                    label = { Text("Gemini API Key (Google AI Studio)") },
+                    placeholder = { Text("AIza...") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    supportingText = { Text("Get yours free at aistudio.google.com/apikey") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            item {
+                OutlinedTextField(
                     value = openRouterKey,
                     onValueChange = { openRouterKey = it },
                     label = { Text("OpenRouter API Key") },
+                    placeholder = { Text("sk-or-...") },
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -109,16 +225,6 @@ fun SettingsScreen(
 
             item {
                 OutlinedTextField(
-                    value = geminiKey,
-                    onValueChange = { geminiKey = it },
-                    label = { Text("Gemini Direct API Key") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            item {
-                OutlinedTextField(
                     value = groqKey,
                     onValueChange = { groqKey = it },
                     label = { Text("Groq Whisper API Key (Free STT)") },
@@ -129,6 +235,7 @@ fun SettingsScreen(
                 )
             }
 
+            // ── External Integrations ──────────────────────────────────────
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text(
@@ -167,6 +274,7 @@ fun SettingsScreen(
                 )
             }
 
+            // ── Routing Toggles ────────────────────────────────────────────
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text(
@@ -213,6 +321,7 @@ fun SettingsScreen(
                 }
             }
 
+            // ── Save ───────────────────────────────────────────────────────
             item {
                 Button(
                     onClick = {
@@ -225,6 +334,7 @@ fun SettingsScreen(
                         keyStore.setSelectedCloudModel(selectedModel)
                         keyStore.setJevRoutingEnabled(jevEnabled)
                         keyStore.setLocalFallbackEnabled(localFallbackEnabled)
+                        keyStore.setPreferredProvider(preferredProvider)
                         savedSnackbar = true
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -235,6 +345,7 @@ fun SettingsScreen(
                 }
             }
 
+            // ── Lessons Ledger ─────────────────────────────────────────────
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text(
@@ -279,6 +390,58 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+// ── Provider picker ──────────────────────────────────────────────────────────
+
+@Composable
+private fun ProviderSegmentedButtons(
+    selectedProvider: String,
+    onProviderSelected: (String) -> Unit
+) {
+    val options = listOf(
+        SecureKeyStore.PROVIDER_OPENROUTER to "OpenRouter",
+        SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO to "Google AI Studio"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+    ) {
+        options.forEachIndexed { index, (key, label) ->
+            val isSelected = selectedProvider == key
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(
+                        if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surface
+                    )
+                    .clickable { onProviderSelected(key) }
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSurface
+                )
+            }
+            // Divider between items
+            if (index < options.lastIndex) {
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(48.dp)
+                        .background(MaterialTheme.colorScheme.outline)
+                )
             }
         }
     }

@@ -78,6 +78,12 @@ class SecureKeyStore @Inject constructor(
     fun setCustomEndpoint(url: String) =
         prefs.edit().putString(KEY_CUSTOM_ENDPOINT, url.trim()).apply()
 
+    /** "openrouter" | "google_ai_studio" */
+    fun getPreferredProvider(): String =
+        prefs.getString(KEY_PREFERRED_PROVIDER, PROVIDER_OPENROUTER) ?: PROVIDER_OPENROUTER
+    fun setPreferredProvider(provider: String) =
+        prefs.edit().putString(KEY_PREFERRED_PROVIDER, provider).apply()
+
     fun isLocalFallbackEnabled(): Boolean =
         prefs.getBoolean(KEY_ENABLE_LOCAL_FALLBACK, true)
     fun setLocalFallbackEnabled(enabled: Boolean) =
@@ -100,8 +106,16 @@ class SecureKeyStore @Inject constructor(
         private const val KEY_CUSTOM_ENDPOINT = "custom_endpoint"
         private const val KEY_ENABLE_LOCAL_FALLBACK = "enable_local_fallback"
         private const val KEY_ENABLE_JEV_ROUTING = "enable_jev_routing"
+        private const val KEY_PREFERRED_PROVIDER = "preferred_provider"
+
+        const val PROVIDER_OPENROUTER = "openrouter"
+        const val PROVIDER_GOOGLE_AI_STUDIO = "google_ai_studio"
 
         const val DEFAULT_CLOUD_MODEL = "google/gemini-3.8-flash"
-        const val DEFAULT_OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+        /** Google AI Studio model ID (no provider prefix) */
+        const val DEFAULT_GOOGLE_AI_STUDIO_MODEL = "gemini-2.5-flash"
+        const val DEFAULT_OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1"
+        /** Google AI Studio OpenAI-compatible endpoint (requires ?key=API_KEY) */
+        const val DEFAULT_GOOGLE_AI_STUDIO_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/openai"
     }
 }
