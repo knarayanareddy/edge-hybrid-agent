@@ -1,5 +1,6 @@
 package com.edgehybrid.agent.tool
 
+import android.Manifest
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
@@ -38,10 +39,12 @@ import javax.inject.Singleton
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -68,6 +71,7 @@ class BuiltInSkillLoader @Inject constructor(
     private val nativeActionHandler: NativeActionHandler,
     private val noteDao: NoteDao,
     private val keyStore: SecureKeyStore,
+    private val systemToolProvider: com.edgehybrid.agent.systemactions.SystemToolProvider,
     @ApplicationContext private val context: Context
 ) : SkillLoader {
 
@@ -357,7 +361,9 @@ class BuiltInSkillLoader @Inject constructor(
             ToolDefinition(
                 function = FunctionDefinition(
                     name = SEND_TELEGRAM_MESSAGE_TOOL_NAME,
-                    description = "Send a message, note, meeting summary, or alert to Telegram. Dispatches via Telegram Bot API or opens Telegram directly.",
+                    description = "Send a message, note, meeting summary, or alert to the user's " +
+                        "configured Telegram chat. Always requires the user to confirm before " +
+                        "sending. The destination is fixed by the app and cannot be chosen here.",
                     parameters = buildJsonObject {
                         put("type", "object")
                         put("properties", buildJsonObject {
@@ -365,12 +371,35 @@ class BuiltInSkillLoader @Inject constructor(
                                 put("type", "string")
                                 put("description", "Text message or summary to send.")
                             })
-                            put("chat_id", buildJsonObject {
-                                put("type", "string")
-                                put("description", "Optional Telegram chat ID or channel username.")
-                            })
                         })
                         put("required", buildJsonArray { add("message") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 14b. Send SMS
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = SEND_SMS_TOOL_NAME,
+                    description = "Open the device SMS composer with a message ready to send. " +
+                        "Always requires the user to confirm first, and the user must press " +
+                        "send in their messaging app. Cannot send silently.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("phone", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Recipient phone number in international format.")
+                            })
+                            put("message", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Message body to prefill in the composer.")
+                            })
+                        })
+                        put("required", buildJsonArray {
+                            add("phone")
+                            add("message")
+                        })
                         put("additionalProperties", false)
                     }
                 )
@@ -761,7 +790,7 @@ class BuiltInSkillLoader @Inject constructor(
             )
         }
 
-        return baseTools + dynamicToolDefs
+        return baseTools + systemToolProvider.toolDefinitions() + dynamicToolDefs
     }
 
     override suspend fun execute(call: ModelToolCall): ToolExecutionOutcome =
@@ -781,6 +810,7 @@ class BuiltInSkillLoader @Inject constructor(
                 call.function.name == CREATE_CALENDAR_EVENT_TOOL_NAME -> executeCreateCalendarEvent(call.function.arguments)
                 call.function.name == QUERY_CALENDAR_EVENTS_TOOL_NAME -> executeQueryCalendarEvents(call.function.arguments)
                 call.function.name == SEND_TELEGRAM_MESSAGE_TOOL_NAME -> executeTelegramMessage(call.function.arguments)
+                call.function.name == SEND_SMS_TOOL_NAME -> executeSendSms(call.function.arguments)
                 call.function.name == SEARCH_CONTACTS_TOOL_NAME -> executeSearchContacts(call.function.arguments)
                 call.function.name == INITIATE_PHONE_CALL_TOOL_NAME -> executeInitiatePhoneCall(call.function.arguments)
                 call.function.name == DRAFT_EMAIL_TOOL_NAME -> executeDraftEmail(call.function.arguments)
@@ -797,7 +827,14 @@ class BuiltInSkillLoader @Inject constructor(
                 call.function.name == SET_ALARM_TOOL_NAME -> executeSetAlarm(call.function.arguments)
                 call.function.name == REGISTER_MCP_SERVER_TOOL_NAME -> executeRegisterMcpServer(call.function.arguments)
                 call.function.name == LIST_MCP_SERVERS_TOOL_NAME -> executeListMcpServers()
-                dynamicTools.containsKey(call.function.name) -> executeCustomDynamicTool(call.function.name, call.function.arguments)
+                systemToolProvider.toolNames().contains(call.function.name) ->
+                    systemToolProvider.execute(call.function.name, call.function.arguments)
+                        ?: ToolExecutionOutcome(
+                            content = buildJsonObject {
+                                put("error", "Could not run ${call.function.name}")
+                            }.toString(),
+                            isError = true
+                        )
                 stagedTools.containsKey(call.function.name) -> executeCustomDynamicTool(call.function.name, call.function.arguments)
                 else -> throw SkillExecutionException("Unsupported skill: ${call.function.name}")
             }
@@ -1052,7 +1089,25 @@ class BuiltInSkillLoader @Inject constructor(
     }
 
     // 8. Flashlight
+    /**
+     * Toggles the torch.
+     *
+     * Reports a missing `CAMERA` grant explicitly instead of returning a bare `false`,
+     * so the model tells the user that permission is needed rather than claiming the
+     * flashlight is off when the call was actually refused.
+     */
     private suspend fun executeFlashlight(arguments: JsonObject): ToolExecutionOutcome {
+        if (!nativeActionHandler.hasPermission(Manifest.permission.CAMERA)) {
+            return ToolExecutionOutcome(
+                buildJsonObject {
+                    put("permission_required", Manifest.permission.CAMERA)
+                    put("status", "Camera permission is required to control the flashlight.")
+                    put("flashlight_changed", false)
+                }.toString(),
+                true
+            )
+        }
+
         val target = arguments["enabled"]?.jsonPrimitive?.booleanOrNull
         val state = nativeActionHandler.toggleFlashlight(target)
         val result = buildJsonObject {
@@ -1236,15 +1291,24 @@ class BuiltInSkillLoader @Inject constructor(
     }
 
     // 14. Telegram Messaging
+    /**
+     * Sends a Telegram message.
+     *
+     * The destination is **pinned to the chat configured by the user in Settings**. The
+     * model cannot supply or override `chat_id`: letting it choose would let a prompt
+     * injection aim the app's authenticated bot at an arbitrary chat. Any `chat_id` in
+     * the tool arguments is ignored.
+     *
+     * If no bot token/chat is configured, this falls back to opening the Telegram app
+     * with the message ready, which still requires the user to press send.
+     */
     private suspend fun executeTelegramMessage(arguments: JsonObject): ToolExecutionOutcome {
         val message = arguments["message"]?.jsonPrimitive?.content?.trim()
             ?.takeIf(String::isNotEmpty)
             ?: throw SkillExecutionException("Telegram message content is required")
-        val explicitChatId = arguments["chat_id"]?.jsonPrimitive?.content?.trim()
-            ?.takeIf(String::isNotEmpty)
 
         val botToken = keyStore.getTelegramBotToken().trim()
-        val chatId = explicitChatId ?: keyStore.getTelegramChatId().trim()
+        val chatId = keyStore.getTelegramChatId().trim()
 
         if (botToken.isNotBlank() && chatId.isNotBlank()) {
             val url = "https://api.telegram.org/bot$botToken/sendMessage"
@@ -1258,9 +1322,8 @@ class BuiltInSkillLoader @Inject constructor(
             val isSuccess = response.status.value in 200..299
             val result = buildJsonObject {
                 put("sent_via", "telegram_bot_api")
-                put("chat_id", chatId)
                 put("http_status", response.status.value)
-                put("status", if (isSuccess) "Message delivered to Telegram" else "Telegram API returned error code ${response.status.value}")
+                put("status", if (isSuccess) "Message delivered to your configured Telegram chat" else "Telegram API returned error code ${response.status.value}")
             }
             return ToolExecutionOutcome(result.toString(), !isSuccess)
         } else {
@@ -1268,13 +1331,42 @@ class BuiltInSkillLoader @Inject constructor(
             val result = buildJsonObject {
                 put("sent_via", "android_telegram_intent")
                 put("opened_telegram_app", launched)
-                put("status", if (launched) "Telegram app opened with message ready to send" else "Could not open Telegram")
-                if (botToken.isBlank()) {
-                    put("tip", "To send messages in the background automatically, enter a Telegram Bot Token in Settings.")
-                }
+                put("status", if (launched) "Telegram app opened with your message ready to send" else "Could not open Telegram")
+                put("tip", "To send messages automatically, add a Telegram Bot Token and Chat ID in Settings.")
             }
             return ToolExecutionOutcome(result.toString(), !launched)
         }
+    }
+
+    // 14b. Send SMS
+    /**
+     * Opens the system SMS composer with a prefilled message.
+     *
+     * This is reached only after the confirmation gate has been approved. It still does
+     * not send anything itself: it hands off to the user's messaging app, which requires
+     * a separate press of "send". A confirmation is therefore necessary but not
+     * sufficient, which is the intended defense in depth.
+     */
+    private suspend fun executeSendSms(arguments: JsonObject): ToolExecutionOutcome {
+        val phone = arguments["phone"]?.jsonPrimitive?.content?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: throw SkillExecutionException("Phone number is required")
+        val message = arguments["message"]?.jsonPrimitive?.content?.trim().orEmpty()
+
+        val opened = nativeActionHandler.sendSms(phone, message)
+        val result = buildJsonObject {
+            put("phone_number", phone)
+            put("sms_composer_opened", opened)
+            put(
+                "status",
+                if (opened) {
+                    "Your messaging app is open with the message ready. Press send to deliver it."
+                } else {
+                    "No messaging app is available on this device."
+                }
+            )
+        }
+        return ToolExecutionOutcome(result.toString(), !opened)
     }
 
     // 15. Search Contacts
@@ -1671,11 +1763,32 @@ class BuiltInSkillLoader @Inject constructor(
     }
 
     // 29. Register MCP Server
+    /**
+     * Registers an external MCP server.
+     *
+     * The bearer token is written to [SecureKeyStore] (AndroidKeyStore-backed,
+     * EncryptedSharedPreferences), **not** to the Room notes table, and it is never
+     * echoed back in the tool result. Only non-secret metadata is persisted to Room so
+     * the list view can render.
+     */
     private suspend fun executeRegisterMcpServer(arguments: JsonObject): ToolExecutionOutcome {
-        val name = arguments["name"]?.jsonPrimitive?.content?.trim() ?: "mcp_server"
-        val url = arguments["url"]?.jsonPrimitive?.content?.trim() ?: ""
+        val name = arguments["name"]?.jsonPrimitive?.content?.trim()?.takeIf(String::isNotEmpty)
+            ?: "mcp_server"
+        val url = arguments["url"]?.jsonPrimitive?.content?.trim()?.takeIf(String::isNotEmpty)
+            ?: throw SkillExecutionException("MCP server URL is required")
         val token = arguments["bearer_token"]?.jsonPrimitive?.content?.trim()
 
+        if (!url.startsWith("https://")) {
+            throw SkillExecutionException("MCP server URL must use https://")
+        }
+
+        // Stored under the endpoint host so StreamableHttpMcpClient looks up the same key.
+        if (!token.isNullOrBlank()) {
+            keyStore.setMcpServerToken(McpServerKey.forUrl(url), token)
+            migrateLegacyTokenToKeystore(name, token)
+        }
+
+        // Only non-secret metadata is stored in Room.
         try {
             noteDao.insertNote(
                 NoteEntity(
@@ -1683,7 +1796,7 @@ class BuiltInSkillLoader @Inject constructor(
                     content = buildJsonObject {
                         put("name", name)
                         put("url", url)
-                        if (!token.isNullOrBlank()) put("token", token)
+                        put("has_token", !token.isNullOrBlank())
                     }.toString(),
                     timestamp = System.currentTimeMillis()
                 )
@@ -1691,21 +1804,94 @@ class BuiltInSkillLoader @Inject constructor(
         } catch (_: Exception) {}
 
         val result = buildJsonObject {
-            put("status", "MCP server '$name' registered at $url")
+            put("status", "MCP server registered")
             put("server_name", name)
             put("endpoint", url)
+            put("credentials_stored_encrypted", !token.isNullOrBlank())
         }
         return ToolExecutionOutcome(result.toString(), false)
     }
 
+    /**
+     * One-time migration of an MCP token that an older build wrote into the Room notes
+     * table in plaintext.
+     *
+     * The token is first copied into the encrypted keystore, then the plaintext copy is
+     * stripped from the note, so the credential is no longer readable from an
+     * unencrypted database. Failure is non-fatal: the user can re-enter the token.
+     */
+    private suspend fun migrateLegacyTokenToKeystore(serverName: String, token: String) {
+        val nameKey = McpServerKey.normalize(serverName)
+        if (nameKey != McpServerKey.DEFAULT_KEY && !keyStore.hasMcpServerToken(nameKey)) {
+            keyStore.setMcpServerToken(nameKey, token)
+        }
+
+        try {
+            val notes = noteDao.getRecentNotes(100)
+            notes
+                .filter { it.title == "MCP_SERVER:$serverName" }
+                .forEach { note ->
+                    val stored = runCatching {
+                        Json.parseToJsonElement(note.content).jsonObject
+                    }.getOrNull() ?: return@forEach
+
+                    val legacy = stored["token"]?.jsonPrimitive?.contentOrNull
+                        ?: stored["bearer_token"]?.jsonPrimitive?.contentOrNull
+
+                    if (legacy.isNullOrBlank()) return@forEach
+
+                    stored["url"]?.jsonPrimitive?.contentOrNull
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { url ->
+                            val urlKey = McpServerKey.forUrl(url)
+                            if (!keyStore.hasMcpServerToken(urlKey)) {
+                                keyStore.setMcpServerToken(urlKey, legacy)
+                            }
+                        }
+
+                    noteDao.updateNote(
+                        note.copy(
+                            content = buildJsonObject {
+                                stored.forEach { entryKey, value: kotlinx.serialization.json.JsonElement ->
+                                    if (entryKey == "token" || entryKey == "bearer_token") return@forEach
+                                    when (value) {
+                                        is JsonPrimitive -> put(entryKey, value.content)
+                                        else -> put(entryKey, value.toString())
+                                    }
+                                }
+                                put("has_token", true)
+                            }.toString()
+                        )
+                    )
+                }
+        } catch (_: Exception) {
+            // Migration is best-effort; never block registration on it.
+        }
+    }
+
     // 30. List MCP Servers
+    /**
+     * Lists registered MCP servers.
+     *
+     * Returns metadata only. Tokens are never included, so this output cannot be used to
+     * exfiltrate a credential into the conversation or the model provider's logs.
+     */
     private suspend fun executeListMcpServers(): ToolExecutionOutcome {
         val servers = mutableListOf<JsonObject>()
         try {
             val notes = noteDao.getRecentNotes(100)
             notes.filter { it.title.startsWith("MCP_SERVER:") }.forEach { note ->
                 try {
-                    servers.add(Json.parseToJsonElement(note.content).jsonObject)
+                    val stored = Json.parseToJsonElement(note.content).jsonObject
+                    servers.add(buildJsonObject {
+                        stored.forEach { (key, value) ->
+                            if (key == "token" || key == "bearer_token") return@forEach
+                            when (value) {
+                                is JsonPrimitive -> put(key, value.content)
+                                else -> put(key, value.toString())
+                            }
+                        }
+                    })
                 } catch (_: Exception) {}
             }
         } catch (_: Exception) {}
@@ -1713,6 +1899,7 @@ class BuiltInSkillLoader @Inject constructor(
         val result = buildJsonObject {
             put("total_registered_mcp_servers", servers.size)
             put("servers", JsonArray(servers))
+            put("note", "Credentials are stored encrypted and are never returned.")
         }
         return ToolExecutionOutcome(result.toString(), false)
     }
@@ -1732,6 +1919,7 @@ class BuiltInSkillLoader @Inject constructor(
         const val CREATE_CALENDAR_EVENT_TOOL_NAME = "create_calendar_event"
         const val QUERY_CALENDAR_EVENTS_TOOL_NAME = "query_calendar_events"
         const val SEND_TELEGRAM_MESSAGE_TOOL_NAME = "send_telegram_message"
+        const val SEND_SMS_TOOL_NAME = "send_sms"
         const val SEARCH_CONTACTS_TOOL_NAME = "search_contacts"
         const val INITIATE_PHONE_CALL_TOOL_NAME = "initiate_phone_call"
         const val DRAFT_EMAIL_TOOL_NAME = "draft_email"

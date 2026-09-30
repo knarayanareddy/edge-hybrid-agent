@@ -64,8 +64,9 @@ class McpException(message: String) : RuntimeException(message)
 class StreamableHttpMcpClient @Inject constructor(
     private val httpClient: HttpClient,
     private val json: Json,
-    private val settings: McpSettings
-) : McpClient {
+    private val settings: McpSettings,
+    private val keyStore: com.edgehybrid.agent.data.local.SecureKeyStore
+) : McpClient, OverridableMcpClient {
 
     private val initializationMutex = Mutex()
     private val requestId = AtomicLong(0)
@@ -76,8 +77,39 @@ class StreamableHttpMcpClient @Inject constructor(
     @Volatile
     private var sessionId: String? = null
 
+    /**
+     * Per-call endpoint/token override, set by [McpMultiServerRouter] so one instance can
+     * serve every enabled server. Null means "use the build-time settings".
+     */
+    @Volatile
+    private var override: Override? = null
+
+    private data class Override(val endpoint: String, val token: String?)
+
+    /**
+     * Retargets this client at [endpoint] with [token].
+     *
+     * Session state is reset because a session id belongs to one server; reusing it across
+     * servers would produce protocol errors that look like auth failures.
+     */
+    override fun withOverride(endpoint: String, token: String?): Boolean {
+        if (endpoint.isBlank() || !endpoint.startsWith("https://")) return false
+        override = Override(endpoint, token)
+        initialized = false
+        sessionId = null
+        return true
+    }
+
+    /** The endpoint currently in use. */
+    private val activeEndpoint: String
+        get() = override?.endpoint ?: settings.endpoint
+
+    /** True when a specific server has been targeted, even if MCP is off by build default. */
+    private val isActive: Boolean
+        get() = override != null || settings.enabled
+
     override suspend fun listTools(): List<ToolDefinition> {
-        if (!settings.enabled) {
+        if (!isActive) {
             return emptyList()
         }
 
@@ -94,7 +126,7 @@ class StreamableHttpMcpClient @Inject constructor(
     }
 
     override suspend fun callTool(call: ModelToolCall): McpCallResult {
-        if (!settings.enabled) {
+        if (!isActive) {
             throw McpException("MCP is disabled")
         }
 
@@ -157,7 +189,7 @@ class StreamableHttpMcpClient @Inject constructor(
     }
 
     private suspend fun notifyInitialized() {
-        val httpResponse: HttpResponse = httpClient.post(settings.endpoint) {
+        val httpResponse: HttpResponse = httpClient.post(activeEndpoint) {
             applyHeaders()
             contentType(ContentType.Application.Json)
             setBody(
@@ -199,7 +231,7 @@ class StreamableHttpMcpClient @Inject constructor(
     }
 
     private suspend fun exchange(payload: JsonObject): McpHttpResponse {
-        val response: HttpResponse = httpClient.post(settings.endpoint) {
+        val response: HttpResponse = httpClient.post(activeEndpoint) {
             applyHeaders()
             contentType(ContentType.Application.Json)
             setBody(payload)
@@ -236,10 +268,31 @@ class StreamableHttpMcpClient @Inject constructor(
         )
         header(MCP_PROTOCOL_HEADER, MCP_PROTOCOL_VERSION)
         sessionId?.let { header(MCP_SESSION_HEADER, it) }
-        settings.bearerToken
-            ?.takeIf(String::isNotBlank)
-            ?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+        resolveBearerToken()?.let { header(HttpHeaders.Authorization, "Bearer $it") }
     }
+
+    /**
+     * Resolves the bearer token to authenticate with.
+     *
+     * A token the user registered at runtime lives in the encrypted keystore and takes
+     * precedence; the build-time constant is only a fallback for development builds. The
+     * value is never logged and never returned to the model layer.
+     */
+    private fun resolveBearerToken(): String? {
+        // A per-server token supplied by the router takes precedence: it is the credential
+        // that was actually issued for the endpoint being called.
+        override?.token?.takeIf { it.isNotBlank() }?.let { return it }
+
+        val serverName = settings.serverKey()
+        val stored = runCatching { keyStore.getMcpServerToken(serverName) }.getOrNull()
+        if (!stored.isNullOrBlank()) {
+            return stored
+        }
+        return settings.bearerToken?.takeIf(String::isNotBlank)
+    }
+
+    /** Key used to look up a per-server token in the keystore. */
+    private fun McpSettings.serverKey(): String = McpServerKey.forUrl(endpoint)
 
     private suspend fun readEventStreamBody(response: HttpResponse): String {
         val channel = response.bodyAsChannel()
