@@ -22,7 +22,7 @@ val cloudBaseUrl = configurationValue(
 val cloudApiKey = configurationValue("EDGE_CLOUD_API_KEY")
 val cloudModel = configurationValue(
     name = "EDGE_CLOUD_MODEL",
-    defaultValue = "google/gemini-2.5-flash"
+    defaultValue = "google/gemini-3.8-flash"
 )
 val typesafeApiKey = configurationValue("EDGE_TYPESAFE_API_KEY")
 val geminiApiKey = configurationValue("EDGE_GEMINI_API_KEY")
