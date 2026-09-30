@@ -19,6 +19,15 @@ interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY timestamp DESC LIMIT :limit")
     suspend fun getRecentNotes(limit: Int = 10): List<NoteEntity>
 
+    /**
+     * Overwrites an existing note in place, preserving its id.
+     *
+     * Used to scrub a secret out of a stored record after it has been copied into the
+     * encrypted keystore.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun updateNote(note: NoteEntity): Long
+
     @Delete
     suspend fun deleteNote(note: NoteEntity): Int
 }

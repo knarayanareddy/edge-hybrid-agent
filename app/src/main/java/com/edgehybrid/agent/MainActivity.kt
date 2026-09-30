@@ -14,13 +14,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
-import com.edgehybrid.agent.core.mcp.McpClient
-import com.edgehybrid.agent.core.tools.SkillLoader
+import com.edgehybrid.agent.mcp.McpServerRegistry
+import com.edgehybrid.agent.tool.SkillLoader
 import com.edgehybrid.agent.data.local.LessonsDao
 import com.edgehybrid.agent.data.local.SecureKeyStore
 import com.edgehybrid.agent.ui.chat.ChatRoute
 import com.edgehybrid.agent.ui.settings.SettingsScreen
 import com.edgehybrid.agent.ui.skills.SkillsScreen
+import com.edgehybrid.agent.ui.tools.ToolsRoute
 import com.edgehybrid.agent.ui.theme.EdgeHybridTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -42,7 +43,7 @@ class MainActivity : ComponentActivity() {
     lateinit var skillLoader: SkillLoader
 
     @Inject
-    lateinit var mcpClient: McpClient
+    lateinit var mcpRegistry: McpServerRegistry
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,7 +54,7 @@ class MainActivity : ComponentActivity() {
                     keyStore = keyStore,
                     lessonsDao = lessonsDao,
                     skillLoader = skillLoader,
-                    mcpClient = mcpClient
+                    mcpRegistry = mcpRegistry
                 )
             }
         }
@@ -63,20 +64,22 @@ class MainActivity : ComponentActivity() {
 /** Tab indices */
 private const val TAB_CHAT     = 0
 private const val TAB_SKILLS   = 1
-private const val TAB_SETTINGS = 2
+private const val TAB_TOOLS    = 2
+private const val TAB_SETTINGS = 3
 
 @Composable
 fun MainAppScreen(
     keyStore: SecureKeyStore,
     lessonsDao: LessonsDao,
     skillLoader: SkillLoader,
-    mcpClient: McpClient
+    mcpRegistry: McpServerRegistry
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(TAB_CHAT) }
 
     val tabTitle = when (selectedTab) {
         TAB_CHAT     -> "Chat"
         TAB_SKILLS   -> "Skills & Tools"
+        TAB_TOOLS    -> "Device Tools"
         TAB_SETTINGS -> "Settings"
         else         -> "Chat"
     }
@@ -106,9 +109,11 @@ fun MainAppScreen(
 
                 TAB_SKILLS -> SkillsScreen(
                     skillLoader = skillLoader,
-                    mcpClient = mcpClient,
+                    mcpRegistry = mcpRegistry,
                     onNavigateBack = { selectedTab = TAB_CHAT }
                 )
+
+                TAB_TOOLS -> ToolsRoute()
 
                 TAB_SETTINGS -> SettingsScreen(
                     keyStore = keyStore,

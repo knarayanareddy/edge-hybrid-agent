@@ -44,6 +44,26 @@ sealed interface AgentStreamEvent {
         val succeeded: Boolean
     ) : AgentStreamEvent
 
+    /**
+     * A tool call needs explicit user approval before it can run. The collector must
+     * suspend the agent loop until the user responds.
+     */
+    data class ConfirmationRequired(
+        val callId: String,
+        val confirmation: com.edgehybrid.agent.nativeactions.ActionConfirmation
+    ) : AgentStreamEvent
+
+    /** The user approved the pending action; execution may proceed. */
+    data class ConfirmationApproved(
+        val callId: String
+    ) : AgentStreamEvent
+
+    /** The user declined (or the request expired); the tool must not run. */
+    data class ConfirmationDeclined(
+        val callId: String,
+        val reason: String
+    ) : AgentStreamEvent
+
     data class Recovering(
         val attempt: Int,
         val delayMs: Long,

@@ -4,16 +4,16 @@ import com.edgehybrid.agent.data.model.ChatMessage
 import com.edgehybrid.agent.data.model.ChatRoles
 import com.edgehybrid.agent.data.model.ModelToolCall
 import com.edgehybrid.agent.tool.ToolCatalog
+import com.edgehybrid.agent.tool.ToolExecutionOutcome
 import com.edgehybrid.agent.tool.ToolGateway
 import javax.inject.Inject
 import javax.inject.Singleton
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 interface AgentLoop {
     fun streamChat(history: List<ChatMessage>): Flow<AgentStreamEvent>
@@ -28,6 +28,8 @@ interface AgentLoop {
 class AgentOrchestrator @Inject constructor(
     private val inferenceEngine: InferenceEngine,
     private val toolGateway: ToolGateway,
+    private val confirmationGate: ConfirmationGate,
+    private val confirmationCoordinator: ConfirmationCoordinator,
     private val policy: AgentPolicy,
     private val clock: MonotonicClock,
     private val suspendDelay: SuspendDelay
@@ -88,7 +90,16 @@ If a user asks a general question or asks about a company, place, or concept, an
             )
         }
 
-        val catalog = toolGateway.loadCatalog()
+        // Jev narrows the tool payload for the request. It is an optimization only:
+        // ToolCatalog.prunedFor keeps dispatch intact, and an unavailable or unsure
+        // selection returns the full catalog.
+        val fullCatalog = toolGateway.loadCatalog()
+        val intentPrompt = workingHistory.lastOrNull { it.role == ChatRoles.USER }?.content.orEmpty()
+        val catalog = if (intentPrompt.isBlank()) {
+            fullCatalog
+        } else {
+            toolGateway.pruneCatalogFor(intentPrompt, fullCatalog)
+        }
         val aggregateUsage = UsageAccumulator()
         val emittedAssistantText = StringBuilder()
         val startedAtNanos = clock.nowNanos()
@@ -235,28 +246,31 @@ If a user asks a general question or asks about a company, place, or concept, an
         )
     }
 
+    /**
+     * Executes model-authored tool calls, forcing every non-read-only call through the
+     * confirmation gate before it can touch the device.
+     *
+     * Calls are run **sequentially**, not with `async`/`awaitAll`, because a confirmation
+     * request suspends this coroutine while it waits for a UI response. Running them
+     * concurrently would interleave several dialogs and let approvals race. Read-only
+     * calls are still safe to run inline; the order of side effects is now the order the
+     * model requested, which is also the order the user saw and approved.
+     */
     private suspend fun FlowCollector<AgentStreamEvent>.executeToolCalls(
         toolCalls: List<ModelToolCall>,
         catalog: ToolCatalog,
         workingHistory: MutableList<ChatMessage>
     ) {
-        toolCalls.forEach { call ->
+        for (call in toolCalls) {
             emit(
                 AgentStreamEvent.ToolExecutionStarted(
                     callId = call.id,
                     toolName = call.function.name
                 )
             )
-        }
 
-        val outcomes = coroutineScope {
-            toolCalls
-                .map { call -> async { toolGateway.execute(call, catalog) } }
-                .awaitAll()
-        }
+            val outcome = runGatedToolCall(call, catalog)
 
-        toolCalls.forEachIndexed { index, call ->
-            val outcome = outcomes[index]
             emit(
                 AgentStreamEvent.ToolExecutionCompleted(
                     callId = call.id,
@@ -271,6 +285,101 @@ If a user asks a general question or asks about a company, place, or concept, an
                 toolCallId = call.id
             )
         }
+    }
+
+    /**
+     * Gates one tool call, suspending for user approval when required.
+     *
+     * Fail-closed: any decline, timeout, or unexpected state produces an error outcome
+     * and the tool never runs.
+     */
+    private suspend fun FlowCollector<AgentStreamEvent>.runGatedToolCall(
+        call: ModelToolCall,
+        catalog: ToolCatalog
+    ): ToolExecutionOutcome {
+        // Remote MCP tools can have arbitrary side effects on a server we do not
+        // control, so they are always confirmed: there is no auto-approve tier for them.
+        val isRemote = call.function.name in catalog.remoteToolNames
+
+        val gated = confirmationGate.gate(call, isRemote)
+
+        return when (gated) {
+            is ConfirmationGate.GateResult.Approved -> runApproved(
+                toolName = call.function.name,
+                execute = gated.execute
+            )
+
+            is ConfirmationGate.GateResult.Rejected -> ToolExecutionOutcome(
+                content = declinedContent(gated.reason),
+                isError = true
+            )
+
+            is ConfirmationGate.GateResult.NeedsApproval -> {
+                emit(
+                    AgentStreamEvent.ConfirmationRequired(
+                        callId = call.id,
+                        confirmation = gated.confirmation
+                    )
+                )
+
+                val approved = confirmationCoordinator.requestApproval(
+                    callId = call.id,
+                    confirmation = gated.confirmation
+                )
+
+                if (!approved) {
+                    emit(
+                        AgentStreamEvent.ConfirmationDeclined(
+                            callId = call.id,
+                            reason = "The user declined this action."
+                        )
+                    )
+                    return ToolExecutionOutcome(
+                        content = declinedContent("The user declined this action."),
+                        isError = true
+                    )
+                }
+
+                emit(AgentStreamEvent.ConfirmationApproved(callId = call.id))
+
+                val released = confirmationGate.runApproved(
+                    call = call,
+                    confirmationId = gated.confirmation.id
+                )
+                when (released) {
+                    is ConfirmationGate.GateResult.Approved -> runApproved(
+                        toolName = call.function.name,
+                        execute = released.execute
+                    )
+
+                    is ConfirmationGate.GateResult.Rejected -> ToolExecutionOutcome(
+                        content = declinedContent(released.reason),
+                        isError = true
+                    )
+
+                    is ConfirmationGate.GateResult.NeedsApproval -> ToolExecutionOutcome(
+                        content = declinedContent("This action is no longer valid."),
+                        isError = true
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun runApproved(
+        toolName: String,
+        execute: suspend () -> String
+    ): ToolExecutionOutcome = try {
+        ToolExecutionOutcome(content = execute(), isError = false)
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (exception: Exception) {
+        ToolExecutionOutcome(
+            content = buildJsonObject {
+                put("error", exception.message ?: "Tool '$toolName' failed")
+            }.toString(),
+            isError = true
+        )
     }
 
     private fun Exception.toUserMessage(): String =

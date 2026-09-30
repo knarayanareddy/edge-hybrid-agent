@@ -7,10 +7,30 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+import java.util.Properties
+
+/**
+ * Resolves a build-time configuration value.
+ *
+ * Precedence: explicit Gradle property → environment variable → `secrets.properties` →
+ * [defaultValue].
+ *
+ * `secrets.properties` is git-ignored so local credentials never reach the repository.
+ * Anything resolved here is compiled into `BuildConfig` and is therefore extractable from
+ * the APK, so use per-app revocable keys rather than shared production credentials.
+ */
 fun configurationValue(name: String, defaultValue: String = ""): String =
     providers.gradleProperty(name).orNull
         ?: providers.environmentVariable(name).orNull
+        ?: localSecrets().getProperty(name)
         ?: defaultValue
+
+/** Lazily loaded, cached `secrets.properties`, or an empty set when absent. */
+private fun localSecrets(): Properties {
+    val file = rootProject.file("secrets.properties")
+    if (!file.exists()) return Properties()
+    return file.inputStream().use { Properties().apply { load(it) } }
+}
 
 fun quoted(value: String): String =
     "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
@@ -20,6 +40,11 @@ val cloudBaseUrl = configurationValue(
     defaultValue = "https://openrouter.ai/api/v1"
 )
 val cloudApiKey = configurationValue("EDGE_CLOUD_API_KEY")
+// Which provider the build defaults to. One of: openrouter, google_ai_studio.
+val cloudProvider = configurationValue(
+    name = "EDGE_CLOUD_PROVIDER",
+    defaultValue = "openrouter"
+)
 val cloudModel = configurationValue(
     name = "EDGE_CLOUD_MODEL",
     defaultValue = "google/gemini-3.8-flash"
@@ -49,6 +74,7 @@ android {
 
         buildConfigField("String", "CLOUD_BASE_URL", quoted(cloudBaseUrl))
         buildConfigField("String", "CLOUD_API_KEY", quoted(cloudApiKey))
+        buildConfigField("String", "CLOUD_PROVIDER", quoted(cloudProvider))
         buildConfigField("String", "CLOUD_MODEL", quoted(cloudModel))
         buildConfigField("String", "TYPESAFE_API_KEY", quoted(typesafeApiKey))
         buildConfigField("String", "GEMINI_API_KEY", quoted(geminiApiKey))
@@ -93,6 +119,13 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Instrumentation tests need the packaged APK's resources so Compose nodes can be
+        // resolved by Espresso, and animations must be disabled so assertions are stable.
+        animationsDisabled = true
+    }
+
+    packaging {
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
 }
 
@@ -132,4 +165,14 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.ktor.client.mock)
+
+    // Instrumentation tests, run on a device or emulator:
+    //   ./gradlew :app:connectedDebugAndroidTest
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.espresso.core)
+    androidTestImplementation(libs.hilt.android.testing)
+    androidTestImplementation(libs.androidx.room.testing)
+    kspAndroidTest(libs.hilt.compiler)
 }

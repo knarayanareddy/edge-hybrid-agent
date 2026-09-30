@@ -535,14 +535,16 @@ fun LibraryMemoryScreen(
                         time = "Oct 16",
                         modifier = Modifier.weight(1f)
                     )
-                    // Import File Placeholder Tile
+                    // Import is not implemented: there is no file picker wired to this
+                    // screen. The tile is shown disabled so it cannot be mistaken for a
+                    // working control.
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .height(140.dp)
                             .border(1.dp, AuraTokens.OutlineVariant, RoundedCornerShape(18.dp))
                             .background(AuraTokens.SurfaceContainerLowest.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
-                            .clickable { },
+                            .clickable(enabled = false) { },
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -554,8 +556,11 @@ fun LibraryMemoryScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.CloudUpload,
-                                    contentDescription = "Upload",
-                                    tint = AuraTokens.Outline,
+                                    // Empty description: a disabled control should be
+                                    // skipped by screen readers rather than announced as
+                                    // an action that does nothing.
+                                    contentDescription = null,
+                                    tint = AuraTokens.Outline.copy(alpha = 0.4f),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -564,7 +569,7 @@ fun LibraryMemoryScreen(
                                 text = "Import File",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = AuraTokens.OnSurface
+                                color = AuraTokens.Outline.copy(alpha = 0.5f)
                             )
                             Text(
                                 text = "PDF, Code, Media",

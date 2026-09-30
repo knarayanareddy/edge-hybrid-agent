@@ -2,6 +2,10 @@
  * Safe Mathematical Expression Evaluator Skill.
  * Evaluates basic arithmetic without invoking `eval` or `Function()`.
  */
+
+/** Maximum parenthesis nesting depth accepted before the expression is rejected. */
+var MAX_DEPTH = 64;
+
 window.__edgeRun = function(input, networkOrigins) {
     try {
         const expression = (typeof input === 'object' && input.expression) ? input.expression : String(input);
@@ -41,22 +45,27 @@ function tokenize(str) {
 
 function parseExpression(tokens) {
     let index = 0;
+    // Bounds recursion so a deeply nested input such as "((((((..." fails as a normal
+    // parse error instead of overflowing the JS stack.
+    let depth = 0;
 
     function parsePrimary() {
         const token = tokens[index++];
         if (!token) throw new Error("Unexpected end of input");
         if (token === '(') {
+            if (++depth > MAX_DEPTH) {
+                throw new Error("Expression nests too deeply (max " + MAX_DEPTH + ")");
+            }
             const val = parseAddSub();
+            depth--;
             if (tokens[index++] !== ')') throw new Error("Missing closing parenthesis");
             return val;
         }
         if (token === 'sqrt') {
-            const val = parsePrimary();
-            return Math.sqrt(val);
+            return Math.sqrt(parsePrimary());
         }
         if (token === 'abs') {
-            const val = parsePrimary();
-            return Math.abs(val);
+            return Math.abs(parsePrimary());
         }
         const num = parseFloat(token);
         if (isNaN(num)) throw new Error("Expected number, got: " + token);

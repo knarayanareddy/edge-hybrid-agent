@@ -10,14 +10,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Native Device Tools (Flashlight, Alarms, Battery Management, Audio, Calendar, Contacts) -->
+    <!-- Native Device Tools (Flashlight, Calendar, Contacts) -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
-    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -78,6 +74,32 @@
             android:name=".service.AgentForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!--
+            OAuth redirect target for MCP servers.
+
+            exported="true" is required: the system browser is a different app and must be
+            able to launch this. That is safe because the intent filter is narrowed to this
+            app's own private scheme and path, and the activity performs no privileged work
+            on its own — it only hands the code/state to McpOAuthManager, which verifies the
+            state parameter before exchanging anything.
+        -->
+        <activity
+            android:name=".mcp.McpOAuthRedirectActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="oauth"
+                    android:path="/callback"
+                    android:scheme="edgehybrid" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

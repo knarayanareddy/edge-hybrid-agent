@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Settings
@@ -40,10 +42,12 @@ data class AuraNavDestination(
     val unselectedIcon: ImageVector
 )
 
-/** 3 functional tabs — Chat, Skills/Tools, Settings */
+/** 4 functional tabs — Chat, Skills/Tools, Device Tools, Settings. Index order must match
+ *  the TAB_* constants in MainActivity. */
 val AuraDestinations = listOf(
     AuraNavDestination("Chat",     Icons.Filled.ChatBubble,      Icons.Outlined.ChatBubbleOutline),
     AuraNavDestination("Skills",   Icons.Filled.Extension,       Icons.Outlined.Extension),
+    AuraNavDestination("Tools",    Icons.Filled.Build,           Icons.Outlined.Build),
     AuraNavDestination("Settings", Icons.Filled.Settings,        Icons.Outlined.Settings),
 )
 

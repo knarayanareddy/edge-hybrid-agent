@@ -105,17 +105,31 @@ class AgentOrchestratorTest {
         engine: InferenceEngine,
         skillLoader: SkillLoader,
         delay: SuspendDelay = RecordingDelay()
-    ): AgentOrchestrator =
-        AgentOrchestrator(
+    ): AgentOrchestrator {
+        val gateway = ToolGateway(
+            skillLoader = skillLoader,
+            mcpRouter = com.edgehybrid.agent.tool.emptyMcpRouter(DisabledMcpClient),
+            jevClient = NoJev,
+            mcpClient = DisabledMcpClient
+        )
+        val registry = com.edgehybrid.agent.nativeactions.ActionConfirmationRegistry()
+        val coordinator = ConfirmationCoordinator(registry)
+        return AgentOrchestrator(
             inferenceEngine = engine,
-            toolGateway = ToolGateway(
+            toolGateway = gateway,
+            confirmationGate = ConfirmationGate(
+                policy = ToolConfirmationPolicy(),
+                registry = registry,
                 skillLoader = skillLoader,
-                mcpClient = DisabledMcpClient
+                toolGateway = gateway,
+                jevSafetyGate = com.edgehybrid.agent.jev.JevSafetyGate(NoJev)
             ),
+            confirmationCoordinator = coordinator,
             policy = AgentPolicy(),
             clock = AtomicStepClock(),
             suspendDelay = delay
         )
+    }
 
     private class WeatherConversionScriptedEngine : InferenceEngine {
         val requests = mutableListOf<List<ChatMessage>>()

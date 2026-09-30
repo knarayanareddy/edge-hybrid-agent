@@ -29,7 +29,6 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
 
 @Singleton
 class NativeActionHandler @Inject constructor(
@@ -49,6 +48,16 @@ class NativeActionHandler @Inject constructor(
             }, null)
         } catch (_: Exception) {}
     }
+
+    /**
+     * True when [permission] has been granted to the app at runtime.
+     *
+     * Every tool that touches a protected provider or hardware checks this before acting,
+     * so a missing grant produces an explicit "permission required" result instead of a
+     * `SecurityException` that is swallowed and reported as success.
+     */
+    fun hasPermission(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
     suspend fun createCalendarEvent(
         title: String,
@@ -79,20 +88,31 @@ class NativeActionHandler @Inject constructor(
             )
         }
 
+    /**
+     * Starts a countdown timer in the system clock.
+     *
+     * `EXTRA_SKIP_UI` is deliberately **not** set: the user must see and confirm the timer
+     * in the clock app, so an agent-scheduled timer can never appear silently.
+     */
     suspend fun setTimer(seconds: Int, message: String): Boolean =
         withContext(Dispatchers.IO) {
-            if (seconds <= 0) {
+            if (seconds !in 1..MAX_TIMER_SECONDS) {
                 false
             } else {
                 val intent = Intent(AlarmClock.ACTION_SET_TIMER)
                     .putExtra(AlarmClock.EXTRA_LENGTH, seconds)
                     .putExtra(AlarmClock.EXTRA_MESSAGE, message)
-                    .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
 
                 launchExternalIntent(intent)
             }
         }
 
+    /**
+     * Schedules a daily alarm in the system clock.
+     *
+     * As with [setTimer], `EXTRA_SKIP_UI` is not set so the user always confirms in the
+     * clock app. This also means the app does not need the `SET_ALARM` permission.
+     */
     suspend fun setAlarm(hour: Int, minutes: Int, message: String): Boolean =
         withContext(Dispatchers.IO) {
             if (hour !in 0..23 || minutes !in 0..59) {
@@ -102,7 +122,6 @@ class NativeActionHandler @Inject constructor(
                     .putExtra(AlarmClock.EXTRA_HOUR, hour)
                     .putExtra(AlarmClock.EXTRA_MINUTES, minutes)
                     .putExtra(AlarmClock.EXTRA_MESSAGE, message)
-                    .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                 launchExternalIntent(intent)
             }
         }
@@ -118,48 +137,46 @@ class NativeActionHandler @Inject constructor(
             }
         }
 
-    suspend fun prepareSms(phone: String, message: String): ActionConfirmation =
+    /**
+     * Validates SMS arguments and opens the system SMS composer.
+     *
+     * This performs no sending itself: it only hands the number and body to the user's
+     * messaging app via `ACTION_SENDTO`, which always requires the user to press send.
+     * Authorization for agent-initiated actions is handled by
+     * [com.edgehybrid.agent.nativeactions.ActionConfirmationRegistry], not here.
+     */
+    suspend fun sendSms(phone: String, message: String): Boolean =
         withContext(Dispatchers.IO) {
-            ActionConfirmation(
-                id = UUID.randomUUID().toString(),
-                tool = NativeTool.SEND_SMS.toolName,
-                summary = "Send an SMS to $phone",
-                params = mapOf(
-                    "phone" to phone,
-                    "message" to message
-                )
+            val cleanPhone = phone.filter { it.isDigit() || it == '+' }
+            if (cleanPhone.length < MIN_DIALABLE_PHONE_LENGTH) {
+                return@withContext false
+            }
+            launchExternalIntent(
+                Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$cleanPhone"))
+                    .putExtra("sms_body", message)
             )
         }
 
-    suspend fun sendSms(confirmation: ActionConfirmation): Boolean =
-        withContext(Dispatchers.IO) {
-            if (confirmation.tool != NativeTool.SEND_SMS.toolName) {
-                false
-            } else {
-                val phone = confirmation.params["phone"] as? String
-                val message = confirmation.params["message"] as? String
-
-                if (phone == null || message == null) {
-                    false
-                } else {
-                    launchExternalIntent(
-                        Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phone"))
-                            .putExtra("sms_body", message)
-                    )
-                }
-            }
+    /**
+     * Toggles the camera torch.
+     *
+     * Requires a granted `CAMERA` permission; without it the call returns `false` instead
+     * of throwing, and the caller reports a permission error rather than a silent
+     * no-op. The camera id is resolved from real hardware characteristics only — there is
+     * no hardcoded fallback, because writing a torch command to an arbitrary camera id
+     * can raise the shutter on an unintended sensor.
+     */
+    suspend fun toggleFlashlight(targetState: Boolean? = null): Boolean = withContext(Dispatchers.IO) {
+        if (!hasPermission(Manifest.permission.CAMERA)) {
+            return@withContext false
         }
 
-    @SuppressLint("MissingPermission")
-    suspend fun toggleFlashlight(targetState: Boolean? = null): Boolean = withContext(Dispatchers.IO) {
         val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
             ?: return@withContext false
 
         flashlightMutex.withLock {
             try {
-                val cameraId = findTorchCamera(cameraManager)
-                    ?: cameraManager.cameraIdList.firstOrNull()
-                    ?: "0"
+                val cameraId = findTorchCamera(cameraManager) ?: return@withLock false
 
                 val desired = targetState ?: !isTorchOn
                 cameraManager.setTorchMode(cameraId, desired)
@@ -231,43 +248,47 @@ class NativeActionHandler @Inject constructor(
         val eventsArray = JSONArray()
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
-        try {
-            val cursor = context.contentResolver.query(
+        val cursor = try {
+            context.contentResolver.query(
                 builder.build(),
                 projection,
                 null,
                 null,
                 "${CalendarContract.Instances.BEGIN} ASC"
             )
-
-            cursor?.use {
-                val titleCol = it.getColumnIndex(CalendarContract.Instances.TITLE)
-                val beginCol = it.getColumnIndex(CalendarContract.Instances.BEGIN)
-                val endCol = it.getColumnIndex(CalendarContract.Instances.END)
-                val locCol = it.getColumnIndex(CalendarContract.Instances.EVENT_LOCATION)
-
-                var count = 0
-                while (it.moveToNext() && count < 20) {
-                    val title = if (titleCol >= 0) it.getString(titleCol) ?: "Untitled Event" else "Untitled"
-                    val startMs = if (beginCol >= 0) it.getLong(beginCol) else 0L
-                    val endMs = if (endCol >= 0) it.getLong(endCol) else 0L
-                    val location = if (locCol >= 0) it.getString(locCol) ?: "" else ""
-
-                    val eventObj = JSONObject().apply {
-                        put("title", title)
-                        put("start", if (startMs > 0) dateFormat.format(Date(startMs)) else "Unknown")
-                        put("end", if (endMs > 0) dateFormat.format(Date(endMs)) else "Unknown")
-                        if (location.isNotBlank()) put("location", location)
-                    }
-                    eventsArray.put(eventObj)
-                    count++
-                }
-            }
+        } catch (denied: SecurityException) {
+            return@withContext JSONObject().apply {
+                put("error", "READ_CALENDAR permission was denied by the system.")
+                put("permission_granted", false)
+            }.toString()
         } catch (e: Exception) {
-            val errObj = JSONObject().apply {
+            return@withContext JSONObject().apply {
                 put("error", e.message ?: "Failed to read calendar database")
+            }.toString()
+        }
+
+        cursor?.use {
+            val titleCol = it.getColumnIndex(CalendarContract.Instances.TITLE)
+            val beginCol = it.getColumnIndex(CalendarContract.Instances.BEGIN)
+            val endCol = it.getColumnIndex(CalendarContract.Instances.END)
+            val locCol = it.getColumnIndex(CalendarContract.Instances.EVENT_LOCATION)
+
+            var count = 0
+            while (it.moveToNext() && count < 20) {
+                val title = if (titleCol >= 0) it.getString(titleCol) ?: "Untitled Event" else "Untitled"
+                val startMs = if (beginCol >= 0) it.getLong(beginCol) else 0L
+                val endMs = if (endCol >= 0) it.getLong(endCol) else 0L
+                val location = if (locCol >= 0) it.getString(locCol) ?: "" else ""
+
+                val eventObj = JSONObject().apply {
+                    put("title", title)
+                    put("start", if (startMs > 0) dateFormat.format(Date(startMs)) else "Unknown")
+                    put("end", if (endMs > 0) dateFormat.format(Date(endMs)) else "Unknown")
+                    if (location.isNotBlank()) put("location", location)
+                }
+                eventsArray.put(eventObj)
+                count++
             }
-            return@withContext errObj.toString()
         }
 
         val resultObj = JSONObject().apply {
@@ -319,26 +340,36 @@ class NativeActionHandler @Inject constructor(
             ContactsContract.CommonDataKinds.Phone.NUMBER
         )
         val selection = "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?"
-        val selectionArgs = arrayOf("%$query%")
+        // The value is still passed as a bind argument, so it cannot alter the query
+        // structure; escaping the LIKE metacharacters keeps "100%" from matching all rows.
+        val selectionArgs = arrayOf("%" + escapeLikeWildcards(query.trim()) + "%")
 
-        try {
-            val cursor = context.contentResolver.query(uri, projection, selection, selectionArgs, null)
-            cursor?.use {
-                val nameIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-                val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                var count = 0
-                while (it.moveToNext() && count < 10) {
-                    val name = if (nameIdx >= 0) it.getString(nameIdx) ?: "Unknown" else "Unknown"
-                    val number = if (numIdx >= 0) it.getString(numIdx) ?: "" else ""
-                    contacts.put(JSONObject().apply {
-                        put("name", name)
-                        put("phone", number)
-                    })
-                    count++
-                }
-            }
+        val cursor = try {
+            context.contentResolver.query(uri, projection, selection, selectionArgs, null)
+        } catch (denied: SecurityException) {
+            return@withContext JSONObject().apply {
+                put("error", "READ_CONTACTS permission was denied by the system.")
+                put("permission_granted", false)
+            }.toString()
         } catch (e: Exception) {
-            return@withContext JSONObject().apply { put("error", e.message ?: "Failed to read contacts") }.toString()
+            return@withContext JSONObject().apply {
+                put("error", e.message ?: "Failed to read contacts")
+            }.toString()
+        }
+
+        cursor?.use {
+            val nameIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+            val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            var count = 0
+            while (it.moveToNext() && count < 10) {
+                val name = if (nameIdx >= 0) it.getString(nameIdx) ?: "Unknown" else "Unknown"
+                val number = if (numIdx >= 0) it.getString(numIdx) ?: "" else ""
+                contacts.put(JSONObject().apply {
+                    put("name", name)
+                    put("phone", number)
+                })
+                count++
+            }
         }
 
         JSONObject().apply {
@@ -348,6 +379,11 @@ class NativeActionHandler @Inject constructor(
             if (contacts.length() == 0) put("message", "No contacts found matching '$query'")
         }.toString()
     }
+
+    private fun escapeLikeWildcards(value: String): String = value
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
 
     suspend fun initiatePhoneCall(phoneNumber: String): Boolean = withContext(Dispatchers.IO) {
         val cleanNumber = phoneNumber.replace(Regex("[^0-9+]"), "")
@@ -386,5 +422,13 @@ class NativeActionHandler @Inject constructor(
         } catch (_: SecurityException) {
             false
         }
+    }
+
+    companion object {
+        /** Shortest string we accept as a dialable number (e.g. emergency short codes). */
+        const val MIN_DIALABLE_PHONE_LENGTH = 2
+
+        /** Upper bound on agent-requested timers: 24 hours. */
+        const val MAX_TIMER_SECONDS = 86_400
     }
 }

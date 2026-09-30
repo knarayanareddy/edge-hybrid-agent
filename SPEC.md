@@ -3,7 +3,95 @@
 > **Target Platform:** Android 14+ (API 34/35), optimized for Samsung Galaxy S23 Ultra (Snapdragon 8 Gen 2, 8–12 GB RAM)  
 > **Architecture Pattern:** Clean Compose Client with Modular Hybrid Engines (LiteRT + Cloud + JEV System 1)  
 > **Repository:** `knarayanareddy/edge-hybrid-agent`  
-> **Status:** All Phases (1, 2, 3, 4, 5) Fully Implemented, Tested, and Verified on main.
+> **Status:** All Phases (1, 2, 3, 4, 5) implemented. See §6 for the security model that is
+> actually enforced at runtime.
+
+---
+
+## 6. Runtime Security Model (authoritative)
+
+This section documents the behavior the code actually implements, and takes precedence
+over the per-phase notes below where the two differ.
+
+### 6.1 Confirmation gate (mandatory for all side effects)
+
+Every model-authored tool call passes through `ConfirmationGate`
+(`agent/ConfirmationGate.kt`) before `SkillLoader` or any Android intent is touched. The
+gate is **fail-closed**:
+
+| Tier | Tools | Behavior |
+| --- | --- | --- |
+| `AUTO_APPROVE` | Read-only: weather, math, currency, wikipedia, time, device status, notes list, calendar query, contacts search, web search, web extract, transit | Run without a dialog |
+| `CONFIRM` | Local side effects: timer, alarm, note, calendar event, camera, flashlight, spotify, custom-tool install, MCP registration | Blocking dialog |
+| `CONFIRM_STRICT` | External sends: `send_sms`, `send_telegram_message`, `draft_email`, `initiate_phone_call`; plus untrusted `skill:*` scripts | Blocking dialog rendering the full recipient and message body, with a warning banner |
+
+Additional guarantees:
+
+- Tiers are matched on **exact tool-name equality** against a host-side table, never on
+  substrings of model-supplied text. A tool that is not explicitly listed as read-only
+  falls through to `CONFIRM`, so adding a tool to the catalog is gated by default.
+- Remote **MCP tools are never auto-approved**; they always confirm, because their side
+  effects occur on a server the app does not control.
+- The dialog receives an inert `ActionConfirmation`: it carries only what to display. The
+  executable closure stays in `ActionConfirmationRegistry`, keyed by id.
+- A confirmation is **one-shot** (consumed atomically before execution, so a replayed id
+  is a no-op) and **expires** after 120 s.
+- A declined, timed-out, or unanswered confirmation **never runs the tool**; the model
+  receives a `status: declined` tool result instead.
+- Tool calls execute **sequentially**, not concurrently, so two dialogs can never race.
+
+### 6.2 External send and credential handling
+
+- `send_telegram_message` **pins the destination** to the chat configured in Settings. The
+  model cannot supply or override `chat_id`, and the parameter is no longer advertised in
+  the tool schema. The bot token is never returned in tool output.
+- MCP bearer tokens are stored in `SecureKeyStore` (AndroidKeyStore-backed
+  `EncryptedSharedPreferences`), never in the Room notes table, and `list_mcp_servers`
+  returns metadata only. Tokens registered by earlier builds are migrated into the
+  keystore and scrubbed from Room on the next registration.
+- `AlarmClock.EXTRA_SKIP_UI` is **not** set for timer or alarm, so the clock app always
+  shows the user what was scheduled. The `SET_ALARM` permission is therefore not declared.
+- SMS opens the system composer via `ACTION_SENDTO`; the user must still press send. A
+  confirmation is necessary but not sufficient.
+
+### 6.3 Sandbox isolation
+
+`HeadlessWebViewSandbox` provides:
+
+- **Origin**: scripts are served from `https://appassets.androidplatform.net/` through
+  `WebViewAssetLoader`. `allowFileAccess`, `allowContentAccess`,
+  `allowFileAccessFromFileURLs`, and `allowUniversalAccessFromFileURLs` are all off.
+- **Script allowlist**: only `calculator.js`, `device_info.js`, and `web_extract.js` may
+  load. The name is validated before a WebView is created, so traversal or an arbitrary
+  asset name is refused up front.
+- **Network**: every request — navigation, subresource, `fetch`, XHR — passes through
+  `shouldInterceptRequest` and is allowed only to an explicitly allowlisted, **exact**
+  `https://host:port` origin that is not a private, loopback, link-local, CGNAT, or
+  otherwise reserved address. Enforcement is in the host, not in the skill script, so it
+  does not depend on a skill cooperating. (This supersedes the earlier Phase 2 wording
+  about a "skill manifest": there is no manifest file; allowlisting is supplied per call
+  and normalized host-side.)
+- **Injection**: model-supplied `inputJson` and `networkOrigins` are inlined into the host
+  document as JSON values and neutralized for the script context (`<`, U+2028, U+2029), so
+  a payload cannot terminate the string literal or the `<script>` element.
+- **Timeout**: 5,000 ms. On expiry the page is torn down eagerly, not merely abandoned.
+- **Bridge**: the single `addJavascriptInterface` exposes `complete`, `fail`, and `log`.
+  None touches files, network, or app state. Log lines are control-character stripped and
+  length-capped.
+
+### 6.4 Permissions
+
+Declared permissions are limited to those with implemented callers: `INTERNET`,
+`ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`,
+`POST_NOTIFICATIONS`, `CAMERA`, `READ_CALENDAR`, `READ_CONTACTS`. Removed as unused:
+`RECORD_AUDIO`, `WRITE_CALENDAR`, `SET_ALARM`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
+
+Tools that touch a protected provider or hardware verify the grant at call time and return
+an explicit `permission_required` result rather than throwing or silently reporting
+success. The Tools screen offers to request a missing grant and replays the action.
+
+`allowBackup="false"` and `usesCleartextTraffic="false"` remain set, so the encrypted
+keystore is not exfiltrated via `adb backup`.
 
 ---
 
@@ -12,7 +100,7 @@
 The application architecture has been fully built out across all 5 planned phases:
 - **Phase 1**: Production Cloud Engine, recursive multi-turn tool calling, SSE stream parser, and keystore-backed security.
 - **Phase 2**: Native Android intent execution, Headless JavaScript sandbox with starter skills, and Ktor MCP gateway.
-- **Phase 3**: TypeSafe JEV System 1 guardrail, pre-flight risk evaluation, interactive Compose confirmation dialog, and Room lessons ledger.
+- **Phase 3**: TypeSafe JEV System 1 guardrail, pre-flight risk evaluation, and Room lessons ledger. The interactive Compose confirmation dialog is rendered and enforced for every non-read-only tool call via `ConfirmationGate` (see §6.1).
 - **Phase 4**: Samsung Galaxy S23 Ultra S Pen BLE air gestures, dynamic screen capture & image compression, and foreground persistence service.
 - **Phase 5**: Local LiteRT engine, intelligent HybridInferenceRouter (offline fallback), on-device vector database with cosine similarity, and RAG prompt augmentation.
 
@@ -82,20 +170,20 @@ Give the agent real hands on the Android device without compromising OS stabilit
    - Expose safe, structured tools to the LLM:
      - `create_calendar_event(title, startTime, endTime, notes)` ➔ launches `Intent(Intent.ACTION_INSERT)`.
      - `create_quick_note(title, text)` ➔ appends to Room local notes database or Samsung Notes intent.
-     - `set_timer_or_alarm(seconds, label)` ➔ calls `AlarmClock.ACTION_SET_TIMER`.
-     - `send_sms(phoneNumber, message)` ➔ pre-fills SMS intent (requires explicit user confirmation chip before sending).
-     - `toggle_flashlight(enabled: Boolean)` ➔ controls `CameraManager.setTorchMode()`.
-2. **Headless JavaScript WebView Sandbox (`ScriptSandbox.kt`)**:
+     - `set_timer_or_alarm(seconds, label)` ➔ calls `AlarmClock.ACTION_SET_TIMER` (UI is shown to the user; `EXTRA_SKIP_UI` is not set).
+     - `send_sms(phoneNumber, message)` ➔ pre-fills the SMS composer via `ACTION_SENDTO` after a `CONFIRM_STRICT` dialog showing the number and full body. The user still presses send.
+     - `toggle_flashlight(enabled: Boolean)` ➔ controls `CameraManager.setTorchMode()` after a `CAMERA` permission check.
+2. **Headless JavaScript WebView Sandbox (`HeadlessWebViewSandbox.kt`)**:
    - For SKILL.md bundles containing executable JavaScript/Python-like scripts:
    - Run a hidden Android `WebView` with JavaScript enabled and `WebViewAssetLoader`.
-   - Block DOM network access unless explicitly declared in the skill manifest.
+   - Host-enforced network allowlisting: requests are permitted only to explicitly allowed, exact public `https://host:port` origins. See §6.3 — the earlier "skill manifest" wording is superseded.
    - Timeout execution strictly after 5,000 milliseconds to prevent battery/CPU locks.
 3. **MCP Tool Integration**:
    - Connect to local Termux server (`http://127.0.0.1:8000/mcp`) or remote servers.
    - Full JSON-RPC 2.0 serialization for `tools/list` and `tools/call`.
 
 #### Phase 2 Checklist
-- [x] Build `NativeActionHandler.kt` with Android Intent dispatching and permission checks (`SEND_SMS`, `SET_ALARM`, `CAMERA`).
+- [x] Build `NativeActionHandler.kt` with Android Intent dispatching and runtime permission checks (`CAMERA`, `READ_CALENDAR`, `READ_CONTACTS`). Alarms and timers no longer request `SET_ALARM` and no longer skip UI.
 - [x] Build `HeadlessWebViewSandbox.kt` with a 5-second hard execution watchdog timer.
 - [x] Create 3 bundled starter skills in `app/src/main/assets/skills/`:
   - `calculator` (safe math evaluation)

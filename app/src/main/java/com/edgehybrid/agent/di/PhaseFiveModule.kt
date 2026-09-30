@@ -1,42 +1,28 @@
 package com.edgehybrid.agent.di
 
-import android.content.Context
-import com.edgehybrid.agent.core.inference.CloudInferenceEngine
-import com.edgehybrid.agent.core.inference.HybridInferenceRouter
-import com.edgehybrid.agent.core.inference.LocalLiteRtEngine
-import com.edgehybrid.agent.core.inference.ModelWeightsManager
 import com.edgehybrid.agent.rag.OnDeviceVectorStore
 import com.edgehybrid.agent.rag.RagContextAugmenter
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
+/**
+ * RAG wiring.
+ *
+ * The inference bindings that used to live here (`ModelWeightsManager`,
+ * `LocalLiteRtEngine`, `HybridInferenceRouter`) pointed at a duplicate
+ * `com.edgehybrid.agent.core.inference` tree that has been removed. The live inference
+ * path is [com.edgehybrid.agent.agent.CloudInferenceEngine], bound in `AgentModule`.
+ *
+ * [OnDeviceVectorStore] is a real, tested in-memory vector store; [RagContextAugmenter]
+ * uses it to prepend relevant prior chunks to a query. Neither is currently invoked from
+ * the agent loop, so RAG is wired but dormant.
+ */
 @Module
 @InstallIn(SingletonComponent::class)
 object PhaseFiveModule {
-
-    @Provides
-    @Singleton
-    fun provideModelWeightsManager(
-        @ApplicationContext context: Context
-    ): ModelWeightsManager = ModelWeightsManager(context)
-
-    @Provides
-    @Singleton
-    fun provideLocalLiteRtEngine(
-        modelWeightsManager: ModelWeightsManager
-    ): LocalLiteRtEngine = LocalLiteRtEngine(modelWeightsManager)
-
-    @Provides
-    @Singleton
-    fun provideHybridInferenceRouter(
-        @ApplicationContext context: Context,
-        localEngine: LocalLiteRtEngine,
-        cloudEngine: CloudInferenceEngine
-    ): HybridInferenceRouter = HybridInferenceRouter(context, localEngine, cloudEngine)
 
     @Provides
     @Singleton

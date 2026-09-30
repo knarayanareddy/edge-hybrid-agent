@@ -83,6 +83,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.edgehybrid.agent.R
 import com.edgehybrid.agent.hardware.vision.ImageCompressor
 import com.edgehybrid.agent.hardware.vision.MultimodalPromptEnricher
+import com.edgehybrid.agent.ui.components.ActionConfirmationDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -104,6 +105,8 @@ fun ChatRoute(
         onToggleDrawer = viewModel::toggleSessionDrawer,
         onRetry = viewModel::retryRecovery,
         onTranscribeAudio = viewModel::transcribeMeetingAudio,
+        onConfirmAction = viewModel::confirmPendingAction,
+        onDeclineAction = viewModel::declinePendingAction,
         onOpenSettings = onOpenSettings
     )
 }
@@ -121,6 +124,8 @@ fun ChatScreen(
     onToggleDrawer: (Boolean?) -> Unit = {},
     onRetry: () -> Unit,
     onTranscribeAudio: (ByteArray, String, (String) -> Unit, (String) -> Unit) -> Unit = { _, _, _, _ -> },
+    onConfirmAction: () -> Unit = {},
+    onDeclineAction: () -> Unit = {},
     onOpenSettings: () -> Unit = {}
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
@@ -473,6 +478,16 @@ fun ChatScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
+        }
+
+        // Blocking gate for any non-read-only agent action. The agent loop is suspended
+        // until the user answers, so this must stay mounted while the action is pending.
+        state.pendingConfirmation?.let { pending ->
+            ActionConfirmationDialog(
+                confirmation = pending.confirmation,
+                onConfirm = onConfirmAction,
+                onDismiss = onDeclineAction
+            )
         }
     }
 }

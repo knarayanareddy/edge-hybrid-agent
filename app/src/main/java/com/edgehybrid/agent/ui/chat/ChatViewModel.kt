@@ -24,7 +24,17 @@ data class ChatUiState(
     val errorMessage: String? = null,
     val currentSessionId: String = "default_chat_session",
     val sessions: List<com.edgehybrid.agent.data.local.ChatSessionEntity> = emptyList(),
-    val isSessionDrawerOpen: Boolean = false
+    val isSessionDrawerOpen: Boolean = false,
+    val pendingConfirmation: PendingConfirmation? = null
+)
+
+/**
+ * A tool call awaiting the user's decision. [callId] is the correlation key the
+ * coordinator uses to resume or cancel the suspended agent loop.
+ */
+data class PendingConfirmation(
+    val callId: String,
+    val confirmation: com.edgehybrid.agent.nativeactions.ActionConfirmation
 )
 
 data class ChatMessageUi(
@@ -64,6 +74,10 @@ data class ToolActivityUi(
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val agentLoop: AgentLoop,
+    private val confirmationCoordinator: com.edgehybrid.agent.agent.ConfirmationCoordinator =
+        com.edgehybrid.agent.agent.ConfirmationCoordinator(
+            com.edgehybrid.agent.nativeactions.ActionConfirmationRegistry()
+        ),
     private val keyStore: com.edgehybrid.agent.data.local.SecureKeyStore? = null,
     private val groqWhisperService: com.edgehybrid.agent.data.remote.GroqWhisperService? = null,
     private val chatDao: com.edgehybrid.agent.data.local.ChatDao? = null
@@ -225,6 +239,9 @@ class ChatViewModel @Inject constructor(
     }
 
     fun cancelGeneration() {
+        // Any dialog the user never answered must resolve as declined, so the suspended
+        // agent loop cannot be left waiting when generation is aborted.
+        confirmationCoordinator.cancelAll()
         val job = generationJob
         if (job != null && job.isActive) {
             job.cancel()
@@ -256,6 +273,7 @@ class ChatViewModel @Inject constructor(
 
     fun clearChat() {
         val sessionId = mutableUiState.value.currentSessionId
+        confirmationCoordinator.cancelAll()
         generationJob?.cancel()
         generationJob = null
         mutableUiState.update {
@@ -272,6 +290,20 @@ class ChatViewModel @Inject constructor(
                 Log.e("ChatViewModel", "Failed to clear chat session", e)
             }
         }
+    }
+
+    /** User approved the pending action; the suspended agent loop resumes. */
+    fun confirmPendingAction() {
+        val pending = mutableUiState.value.pendingConfirmation ?: return
+        mutableUiState.update { it.copy(pendingConfirmation = null) }
+        confirmationCoordinator.approve(pending.callId)
+    }
+
+    /** User declined; the tool is cancelled and the loop continues without it. */
+    fun declinePendingAction() {
+        val pending = mutableUiState.value.pendingConfirmation ?: return
+        mutableUiState.update { it.copy(pendingConfirmation = null) }
+        confirmationCoordinator.decline(pending.callId)
     }
 
     fun transcribeMeetingAudio(
@@ -469,6 +501,22 @@ class ChatViewModel @Inject constructor(
                         }
                     )
                 }
+
+            is AgentStreamEvent.ConfirmationRequired ->
+                mutableUiState.update { state ->
+                    state.copy(
+                        pendingConfirmation = PendingConfirmation(
+                            callId = event.callId,
+                            confirmation = event.confirmation
+                        )
+                    )
+                }
+
+            is AgentStreamEvent.ConfirmationApproved ->
+                mutableUiState.update { state -> state.copy(pendingConfirmation = null) }
+
+            is AgentStreamEvent.ConfirmationDeclined ->
+                mutableUiState.update { state -> state.copy(pendingConfirmation = null) }
 
             is AgentStreamEvent.Recovering ->
                 updateMessage(assistantMessageId) { message ->
