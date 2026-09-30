@@ -8,3 +8,33 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Build output anywhere in the tree. An unanchored /build only matches the repository
+# root, so app/build/ would otherwise be committable — and it contains BuildConfig with
+# compiled-in API keys.
+**/build/
+build/
+
+# Local secrets. Never commit these: they are read by app/build.gradle.kts as Gradle
+# properties and end up compiled into BuildConfig, so they ship inside the APK.
+secrets.properties
+*.jks
+*.keystore
+
+# Signing material and local tool output
+*.apk
+*.aab
+app/release/
+.cxx/
+captures/
+.externalNativeBuild/
+*.hprof
+
+# IDE / OS noise
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Kotlin compiler scratch
+.kotlin/
