@@ -280,78 +280,15 @@ fun ChatScreen(
             }
 
             if (state.messages.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Surface(
-                            shape = MaterialTheme.shapes.extraLarge,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.size(56.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.Share,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(28.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Edge Hybrid Agent",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Multimodal Vision • On-Device Security • Live Tools",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SuggestionChip(
-                                onClick = { onSend("What is the weather in Amsterdam?", null) },
-                                label = { Text("⛅ Weather") }
-                            )
-                            SuggestionChip(
-                                onClick = { onSend("Search Wikipedia for Achmea in Amsterdam", null) },
-                                label = { Text("📖 Wikipedia Achmea") }
-                            )
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SuggestionChip(
-                                onClick = { onSend("Convert 100 USD to EUR", null) },
-                                label = { Text("💶 100 USD to EUR") }
-                            )
-                            SuggestionChip(
-                                onClick = { onSend("Calculate sqrt(144) * 8.5 + 25", null) },
-                                label = { Text("🧮 Math") }
-                            )
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SuggestionChip(
-                                onClick = { onSend("What time is it in Tokyo?", null) },
-                                label = { Text("🕒 Tokyo Time") }
-                            )
-                            SuggestionChip(
-                                onClick = { onSend("Check device battery and memory status", null) },
-                                label = { Text("🔋 Battery & RAM") }
-                            )
-                        }
-                        SuggestionChip(
-                            onClick = { onSend("Toggle the flashlight", null) },
-                            label = { Text("🔦 Toggle Flashlight") }
-                        )
-                    }
-                }
+                com.edgehybrid.agent.ui.chats.ChatsLandingView(
+                    sessions = state.sessions,
+                    onSelectSession = onSelectSession,
+                    onStartNewChat = onNewChat,
+                    onLaunchCamera = {
+                        onSend("Please open the camera viewfinder", null)
+                    },
+                    modifier = Modifier.weight(1f)
+                )
             } else {
                 LazyColumn(
                     state = listState,

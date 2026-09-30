@@ -33,6 +33,12 @@ import com.edgehybrid.agent.ui.theme.EdgeHybridTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
+import com.edgehybrid.agent.ui.canvas.CanvasInspectorScreen
+import com.edgehybrid.agent.ui.components.AuraBottomNavigationBar
+import com.edgehybrid.agent.ui.components.AuraHeader
+import com.edgehybrid.agent.ui.library.LibraryMemoryScreen
+import com.edgehybrid.agent.ui.theme.AuraTokens
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
@@ -73,29 +79,27 @@ fun MainAppScreen(
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
+    val tabTitle = when (selectedTab) {
+        0 -> "Chats"
+        1 -> "Canvas"
+        2 -> "Library"
+        else -> "Settings"
+    }
+
     Scaffold(
+        topBar = {
+            AuraHeader(
+                title = tabTitle,
+                onProfileClick = { selectedTab = 3 }
+            )
+        },
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Share, contentDescription = "Chat") },
-                    label = { Text("Chat") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.Build, contentDescription = "Skills") },
-                    label = { Text("Skills") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Default.Check, contentDescription = "Settings") },
-                    label = { Text("Settings") }
-                )
-            }
-        }
+            AuraBottomNavigationBar(
+                selectedTab = selectedTab,
+                onTabSelected = { selectedTab = it }
+            )
+        },
+        containerColor = AuraTokens.Surface
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -103,13 +107,13 @@ fun MainAppScreen(
                 .padding(innerPadding)
         ) {
             when (selectedTab) {
-                0 -> ChatRoute(onOpenSettings = { selectedTab = 2 })
-                1 -> SkillsScreen(
-                    skillLoader = skillLoader,
-                    mcpClient = mcpClient,
+                0 -> ChatRoute(onOpenSettings = { selectedTab = 3 })
+                1 -> CanvasInspectorScreen(onNavigateBack = { selectedTab = 0 })
+                2 -> LibraryMemoryScreen(
+                    lessonsDao = lessonsDao,
                     onNavigateBack = { selectedTab = 0 }
                 )
-                2 -> SettingsScreen(
+                3 -> SettingsScreen(
                     keyStore = keyStore,
                     lessonsDao = lessonsDao,
                     onNavigateBack = { selectedTab = 0 }

@@ -101,7 +101,7 @@ class SecureKeyStore @Inject constructor(
         private const val KEY_ENABLE_LOCAL_FALLBACK = "enable_local_fallback"
         private const val KEY_ENABLE_JEV_ROUTING = "enable_jev_routing"
 
-        const val DEFAULT_CLOUD_MODEL = "google/gemini-2.5-flash"
+        const val DEFAULT_CLOUD_MODEL = "google/gemini-3.8-flash"
         const val DEFAULT_OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
     }
 }

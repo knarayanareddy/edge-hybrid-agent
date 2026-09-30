@@ -13,7 +13,7 @@ candidate_keys = [k.strip() for k in raw_keys.split("|") if k.strip()]
 gemini_key = os.environ.get("GEMINI_KEY", "").strip()
 
 models_to_test = [
-    "google/gemini-2.5-flash",
+    "google/gemini-3.8-flash",
     "google/gemini-2.0-flash-exp:free",
     "meta-llama/llama-3.3-70b-instruct:free",
     "qwen/qwen-2.5-72b-instruct:free"
