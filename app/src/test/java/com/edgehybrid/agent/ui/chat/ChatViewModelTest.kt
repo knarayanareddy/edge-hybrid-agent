@@ -65,7 +65,7 @@ class ChatViewModelTest {
             MessageDeliveryState.COMPLETE,
             assistantAfterRetry.deliveryState
         )
-        assertEquals("20°C, or 68°F.", assistantAfterRetry.content)
+        assertEquals("Tokyo is 20°C, or 68°F.", assistantAfterRetry.content)
         assertEquals(1, afterRetry.messages.count { it.role == ChatMessageRole.USER })
         assertEquals(2, afterRetry.messages.size)
     }

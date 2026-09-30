@@ -367,30 +367,34 @@ class ChatViewModel @Inject constructor(
 
         startAgent(
             baseHistory = retry.baseHistory,
-            continuationText = retry.partialText
+            continuationText = retry.partialText,
+            targetAssistantMessageId = retry.assistantMessageId
         )
     }
 
     private fun startAgent(
         baseHistory: List<ChatMessage>,
-        continuationText: String?
+        continuationText: String?,
+        targetAssistantMessageId: String? = null
     ) {
-        val assistantMessageId = UUID.randomUUID().toString()
+        val assistantMessageId = targetAssistantMessageId ?: UUID.randomUUID().toString()
         pendingRetry = PendingRetry(
             baseHistory = baseHistory,
             assistantMessageId = assistantMessageId,
             partialText = continuationText.orEmpty()
         )
 
-        mutableUiState.update { state ->
-            state.copy(
-                messages = state.messages + ChatMessageUi(
-                    id = assistantMessageId,
-                    role = ChatMessageRole.ASSISTANT,
-                    content = "",
-                    deliveryState = MessageDeliveryState.STREAMING
+        if (targetAssistantMessageId == null) {
+            mutableUiState.update { state ->
+                state.copy(
+                    messages = state.messages + ChatMessageUi(
+                        id = assistantMessageId,
+                        role = ChatMessageRole.ASSISTANT,
+                        content = "",
+                        deliveryState = MessageDeliveryState.STREAMING
+                    )
                 )
-            )
+            }
         }
 
         generationJob = viewModelScope.launch {
