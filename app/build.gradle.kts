@@ -40,11 +40,33 @@ val cloudBaseUrl = configurationValue(
     defaultValue = "https://openrouter.ai/api/v1"
 )
 val cloudApiKey = configurationValue("EDGE_CLOUD_API_KEY")
-// Spare keys for 429 rotation. Pool size is fixed at 3 so BuildConfig fields are
-// static; a fourth key would need a new field and rebuild.
-val cloudApiKey1 = configurationValue("EDGE_CLOUD_API_KEY_1")
-val cloudApiKey2 = configurationValue("EDGE_CLOUD_API_KEY_2")
-val cloudApiKey3 = configurationValue("EDGE_CLOUD_API_KEY_3")
+
+/**
+ * Builds the OpenRouter key pool used for 429 rotation.
+ *
+ * Emitted as ONE comma-separated BuildConfig field rather than a fixed set of
+ * `CLOUD_API_KEY_1..N` fields, so raising the pool size needs no schema change and
+ * no new field on the Kotlin side.
+ *
+ * Resolution order per slot: an explicit `EDGE_CLOUD_API_KEY_N`, then the
+ * `OPENROUTER_API_KEY_N` convention already used by the local `.env` (where the
+ * primary is unsuffixed and spares are `_2`, `_3`, ...), then nothing. Blank slots
+ * are dropped so a partially configured pool does not rotate onto an empty key.
+ */
+fun buildKeyPool(primary: String, maxSpare: Int = 8): String {
+    val slots = mutableListOf<String>()
+    if (primary.isNotBlank()) slots += primary.trim()
+    for (n in 1..maxSpare) {
+        // `OPENROUTER_API_KEY` is the primary; its spares start at `_2`.
+        val envSuffix = if (n == 1) "" else "_$n"
+        val candidate = configurationValue("EDGE_CLOUD_API_KEY_$n")
+            .ifBlank { configurationValue("OPENROUTER_API_KEY$envSuffix") }
+        if (candidate.isNotBlank()) slots += candidate.trim()
+    }
+    return slots.distinct().joinToString(",")
+}
+
+val cloudKeyPool = buildKeyPool(cloudApiKey)
 // Which provider the build defaults to. One of: openrouter, google_ai_studio.
 val cloudProvider = configurationValue(
     name = "EDGE_CLOUD_PROVIDER",
@@ -79,9 +101,9 @@ android {
 
         buildConfigField("String", "CLOUD_BASE_URL", quoted(cloudBaseUrl))
         buildConfigField("String", "CLOUD_API_KEY", quoted(cloudApiKey))
-        buildConfigField("String", "CLOUD_API_KEY_1", quoted(cloudApiKey1))
-        buildConfigField("String", "CLOUD_API_KEY_2", quoted(cloudApiKey2))
-        buildConfigField("String", "CLOUD_API_KEY_3", quoted(cloudApiKey3))
+        // Comma-separated, comma-free by construction: OpenRouter keys are
+        // `sk-or-...` and never contain a comma.
+        buildConfigField("String", "CLOUD_KEY_POOL", quoted(cloudKeyPool))
         buildConfigField("String", "CLOUD_PROVIDER", quoted(cloudProvider))
         buildConfigField("String", "CLOUD_MODEL", quoted(cloudModel))
         buildConfigField("String", "TYPESAFE_API_KEY", quoted(typesafeApiKey))

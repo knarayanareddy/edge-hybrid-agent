@@ -31,36 +31,33 @@ class SecureKeyStore @Inject constructor(
     fun getOpenRouterApiKey(): String = getOpenRouterApiKey(0)
 
     /**
-     * Returns the OpenRouter API key at the given index, with rotation.
+     * Parses `BuildConfig.CLOUD_KEY_POOL` into the ordered rotation pool.
      *
-     * Index 0 is the primary key (prefs > BuildConfig). Index > 0 reads from the
-     * numbered env vars (OPENROUTER_API_KEY_1, OPENROUTER_API_KEY_2, ...).
-     * This enables rotation on 429 errors: the caller increments the index and
-     * tries the next key without needing a new build.
+     * The pool is a comma-separated BuildConfig string rather than a fixed set of
+     * fields so the size is not baked into the schema. Blank entries are dropped:
+     * a partially configured pool must not rotate onto an empty key, which would
+     * send an unauthenticated request and look like a provider fault.
      */
+    private fun keyPool(): List<String> =
+        com.edgehybrid.agent.BuildConfig.CLOUD_KEY_POOL
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+
     fun getOpenRouterApiKey(index: Int): String {
         if (index < 0) return ""
+        // Slot 0 honours the in-app Settings value, which is the user's own override
+        // and should win over whatever the build compiled in.
         if (index == 0) {
             val saved = prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: ""
-            return if (saved.isNotBlank()) {
-                saved
-            } else {
-                com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY.takeIf { it.isNotBlank() } ?: ""
-            }
+            return if (saved.isNotBlank()) saved else keyPool().firstOrNull() ?: ""
         }
-        // Android has no shell environment, so System.getenv is only populated
-        // when a test runner injects one. Build-time keys are the real source;
-        // the numbered slots are compiled from EDGE_CLOUD_API_KEY_1..N.
+        // System.getenv is empty on Android, so BuildConfig is the only real source
+        // for the spares. The env lookup is kept for host-side unit tests.
         val fromEnv = runCatching { System.getenv("OPENROUTER_API_KEY_$index") }.getOrNull()
-        return if (!fromEnv.isNullOrBlank()) fromEnv else buildConfigKey(index)
-    }
-
-    /** Reads `CLOUD_API_KEY_1..N` from BuildConfig, or "" when not configured. */
-    private fun buildConfigKey(index: Int): String = when (index) {
-        1 -> com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY_1
-        2 -> com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY_2
-        3 -> com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY_3
-        else -> ""
+        if (!fromEnv.isNullOrBlank()) return fromEnv
+        return keyPool().getOrNull(index) ?: ""
     }
 
     /**
