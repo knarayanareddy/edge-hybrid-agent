@@ -8,18 +8,19 @@ import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
 import android.os.Build
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.speech.RecognizerIntent
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,10 +34,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -47,9 +50,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -71,13 +76,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import android.provider.OpenableColumns
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -246,19 +253,14 @@ fun ChatScreen(
                 },
                 title = {
                     val activeSession = state.sessions.firstOrNull { it.id == state.currentSessionId }
-                    Column(modifier = Modifier.clickable { onToggleDrawer(true) }) {
-                        Text(
-                            text = activeSession?.title ?: "Edge Hybrid Agent",
-                            fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = "Multimodal Vision • Groq Whisper • 30 Tools",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Text(
+                        text = activeSession?.title ?: "New conversation",
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable { onToggleDrawer(true) }
+                    )
                 },
                 actions = {
                     IconButton(onClick = onNewChat) {
@@ -426,7 +428,7 @@ fun ChatScreen(
                         )
                         Button(
                             onClick = onNewChat,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 20.dp)
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
@@ -578,9 +580,24 @@ private fun MessageBubble(
                 }
 
                 SelectionContainer {
+                    // Assistant replies are markdown; user input is not. Rendering both
+                    // through the same parser would italicise a user's `snake_case`
+                    // and turn a typed `**` into stray styling.
                     Text(
-                        text = message.content,
-                        style = MaterialTheme.typography.bodyLarge
+                        text = if (isUser) {
+                            AnnotatedString(message.content)
+                        } else {
+                            MarkdownRenderer.markdown(
+                                message.content,
+                                MaterialTheme.typography.bodyLarge.fontSize
+                            )
+                        },
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            // ChatGPT-sized measure: 1.55 on a 16sp base reads as
+                            // set body copy rather than the 1.0 default, which is
+                            // why dense assistant replies looked cramped.
+                            lineHeight = MaterialTheme.typography.bodyLarge.fontSize * 1.55f
+                        )
                     )
                 }
 
@@ -862,52 +879,74 @@ private fun MessageComposer(
                     )
                 }
 
-                OutlinedTextField(
+                // Borderless on purpose. The enclosing pill is already the outline,
+                // so an OutlinedTextField here rendered a second border inside it and
+                // squeezed Send against the pill's rounded edge.
+                BasicTextField(
                     value = draft,
                     onValueChange = onDraftChanged,
                     modifier = Modifier.weight(1f),
-                    enabled = enabled,
-                    placeholder = {
-                        Text(
-                            text = if (attachedBitmap != null) "Ask about this photo or request OCR..." else stringResource(R.string.chat_input_hint),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    },
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                     maxLines = 4,
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Send
-                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    decorationBox = { inner ->
+                        if (draft.isEmpty()) {
+                            Text(
+                                text = if (attachedBitmap != null) {
+                                    "Ask about this photo or request OCR..."
+                                } else {
+                                    stringResource(R.string.chat_input_hint)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2
+                            )
+                        }
+                        inner()
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(
                         onSend = {
-                            if ((draft.isNotBlank() || attachedBitmap != null) && enabled) {
-                                onSend()
-                            }
+                            if ((draft.isNotBlank() || attachedBitmap != null) && enabled) onSend()
                         }
                     )
                 )
 
+
+                // Compact and icon-led. The previous full-size Button was ~48dp tall
+                // inside a 36dp row, so it broke out of the pill's rounded end and
+                // pushed the layout wider than the screen.
+                val canSend = enabled && (draft.isNotBlank() || attachedBitmap != null)
                 if (isGenerating) {
-                    Button(
+                    FilledIconButton(
                         onClick = onCancel,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError
+                        modifier = Modifier.size(36.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
                         )
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Stop",
-                            modifier = Modifier.size(16.dp)
+                            contentDescription = "Stop generating",
+                            modifier = Modifier.size(18.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Stop")
                     }
                 } else {
-                    Button(
+                    FilledIconButton(
                         onClick = onSend,
-                        enabled = enabled && (draft.isNotBlank() || attachedBitmap != null)
+                        enabled = canSend,
+                        modifier = Modifier.size(36.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
                     ) {
-                        Text(text = stringResource(R.string.send))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send message",
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
