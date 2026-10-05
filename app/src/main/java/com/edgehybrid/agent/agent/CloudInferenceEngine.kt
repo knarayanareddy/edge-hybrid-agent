@@ -215,14 +215,24 @@ class CloudInferenceEngine @Inject constructor(
 
                 // On 429: try the next OpenRouter key before giving up.
                 // This is the only way to recover from a per-key daily limit.
+                // On 429: rotate to the next OpenRouter key before spending the retry
+                // budget. This is the only recovery from a per-key daily limit.
+                //
+                // The sentinel is -1 (non-null Int) for "pool spent", so the check must
+                // be `>= 0`. A `!= null` test is always true for a live store and
+                // would wrap onto a negative index, re-read a blank key, and loop.
                 if (retryable.statusCode == 429) {
-                    val next = keyStore?.getNextOpenRouterKeyIndex(currentKeyIndex)
-                    if (next != null) {
+                    val next = keyStore?.getNextOpenRouterKeyIndex(currentKeyIndex) ?: -1
+                    if (next >= 0) {
                         currentKeyIndex = next
+                        // A fresh key gets the full retry budget, not the remainder.
                         retryCount = 0
                         continue
                     }
                 }
+                // No spare key: fall through to the normal backoff. A 429 with a single
+                // key may still clear within the retry window, and 503 always needs the
+                // backoff regardless of key state.
 
                 suspendDelay.wait(retryable.delayMs)
                 retryCount += 1

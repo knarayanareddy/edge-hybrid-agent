@@ -40,6 +40,11 @@ val cloudBaseUrl = configurationValue(
     defaultValue = "https://openrouter.ai/api/v1"
 )
 val cloudApiKey = configurationValue("EDGE_CLOUD_API_KEY")
+// Spare keys for 429 rotation. Pool size is fixed at 3 so BuildConfig fields are
+// static; a fourth key would need a new field and rebuild.
+val cloudApiKey1 = configurationValue("EDGE_CLOUD_API_KEY_1")
+val cloudApiKey2 = configurationValue("EDGE_CLOUD_API_KEY_2")
+val cloudApiKey3 = configurationValue("EDGE_CLOUD_API_KEY_3")
 // Which provider the build defaults to. One of: openrouter, google_ai_studio.
 val cloudProvider = configurationValue(
     name = "EDGE_CLOUD_PROVIDER",
@@ -74,6 +79,9 @@ android {
 
         buildConfigField("String", "CLOUD_BASE_URL", quoted(cloudBaseUrl))
         buildConfigField("String", "CLOUD_API_KEY", quoted(cloudApiKey))
+        buildConfigField("String", "CLOUD_API_KEY_1", quoted(cloudApiKey1))
+        buildConfigField("String", "CLOUD_API_KEY_2", quoted(cloudApiKey2))
+        buildConfigField("String", "CLOUD_API_KEY_3", quoted(cloudApiKey3))
         buildConfigField("String", "CLOUD_PROVIDER", quoted(cloudProvider))
         buildConfigField("String", "CLOUD_MODEL", quoted(cloudModel))
         buildConfigField("String", "TYPESAFE_API_KEY", quoted(typesafeApiKey))

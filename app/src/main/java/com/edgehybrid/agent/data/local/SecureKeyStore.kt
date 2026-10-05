@@ -39,17 +39,28 @@ class SecureKeyStore @Inject constructor(
      * tries the next key without needing a new build.
      */
     fun getOpenRouterApiKey(index: Int): String {
-        return when (index) {
-            0 -> {
-                val saved = prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: ""
-                if (saved.isNotBlank()) saved
-                else com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY.takeIf { it.isNotBlank() } ?: ""
-            }
-            else -> {
-                val envName = "OPENROUTER_API_KEY_$index"
-                System.getenv(envName)?.takeIf { it.isNotBlank() } ?: ""
+        if (index < 0) return ""
+        if (index == 0) {
+            val saved = prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: ""
+            return if (saved.isNotBlank()) {
+                saved
+            } else {
+                com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY.takeIf { it.isNotBlank() } ?: ""
             }
         }
+        // Android has no shell environment, so System.getenv is only populated
+        // when a test runner injects one. Build-time keys are the real source;
+        // the numbered slots are compiled from EDGE_CLOUD_API_KEY_1..N.
+        val fromEnv = runCatching { System.getenv("OPENROUTER_API_KEY_$index") }.getOrNull()
+        return if (!fromEnv.isNullOrBlank()) fromEnv else buildConfigKey(index)
+    }
+
+    /** Reads `CLOUD_API_KEY_1..N` from BuildConfig, or "" when not configured. */
+    private fun buildConfigKey(index: Int): String = when (index) {
+        1 -> com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY_1
+        2 -> com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY_2
+        3 -> com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY_3
+        else -> ""
     }
 
     /**
