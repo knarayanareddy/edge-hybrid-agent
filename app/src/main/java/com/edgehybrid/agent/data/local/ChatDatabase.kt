@@ -38,37 +38,61 @@ abstract class ChatDatabase : RoomDatabase() {
          * `fallbackToDestructiveMigration()` would drop the `lessons` table, which is
          * the only place anything the "self-correcting" feature has learned lives.
          */
+        /**
+         * v1 -> v2: adds the cross-app memory tables.
+         *
+         * The DDL below is a byte-for-byte copy of what Room generates for these
+         * entities, and it must stay that way. Room validates the live schema after
+         * every migration by comparing it to the generated one, and it compares the
+         * DDL *text* - so an extra `DEFAULT 'PROFILE'` that looks harmless makes the
+         * two differ and the app dies on launch with
+         * "Migration didn't properly handle: user_memories".
+         *
+         * That failure is only observable at runtime: JVM unit tests cannot open a
+         * Room database, and the CI instrumentation job starts from a clean install
+         * where the DB is already at v2, so no migration ever runs there. Only an
+         * upgrade of an existing v1 install exercises this path.
+         *
+         * If a column is added to these entities later, bump the version and add
+         * MIGRATION_2_3 rather than editing this one, which has already shipped.
+         */
         val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS user_memories (" +
-                        "id TEXT NOT NULL PRIMARY KEY, " +
-                        "content TEXT NOT NULL, " +
-                        "category TEXT NOT NULL DEFAULT 'PROFILE', " +
-                        "keywords TEXT NOT NULL DEFAULT '', " +
-                        "frequency INTEGER NOT NULL DEFAULT 1, " +
-                        "isActive INTEGER NOT NULL DEFAULT 1, " +
-                        "createdAt INTEGER NOT NULL, " +
-                        "lastUsedAt INTEGER NOT NULL)"
+                    "CREATE TABLE IF NOT EXISTS `user_memories` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`content` TEXT NOT NULL, " +
+                        "`category` TEXT NOT NULL, " +
+                        "`keywords` TEXT NOT NULL, " +
+                        "`frequency` INTEGER NOT NULL, " +
+                        "`isActive` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`lastUsedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
                 )
                 db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS conversation_memories (" +
-                        "id TEXT NOT NULL PRIMARY KEY, " +
-                        "summary TEXT NOT NULL, " +
-                        "keywords TEXT NOT NULL DEFAULT '', " +
-                        "sessionId TEXT NOT NULL DEFAULT '', " +
-                        "role TEXT NOT NULL DEFAULT 'exchange', " +
-                        "createdAt INTEGER NOT NULL)"
+                    "CREATE TABLE IF NOT EXISTS `conversation_memories` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`summary` TEXT NOT NULL, " +
+                        "`keywords` TEXT NOT NULL, " +
+                        "`sessionId` TEXT NOT NULL, " +
+                        "`role` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
                 )
-                // Retrieval scans active rows by frequency then recency.
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS idx_user_memories_active " +
-                        "ON user_memories (isActive, frequency, lastUsedAt)"
-                )
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS idx_conversation_memories_created " +
-                        "ON conversation_memories (createdAt)"
-                )
+                // No CREATE INDEX here on purpose.
+                //
+                // Room validates the whole schema after a migration, and an index it
+                // does not expect is a mismatch just like a wrong column type. These
+                // two indexes were declared in the migration but never on the
+                // entities, so Room threw "Migration didn't properly handle:
+                // user_memories" and rolled the migration back.
+                //
+                // If these are worth having, declare them with @Entity(indices = ...)
+                // on UserMemoryEntity / ConversationMemoryEntity, which is what makes
+                // Room expect them. Retrieval currently scans a table that holds a
+                // user's facts - tens of rows, not millions - so the index would buy
+                // nothing measurable.
             }
         }
 
