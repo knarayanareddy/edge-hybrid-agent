@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -100,6 +101,14 @@ fun AuraDynamicIsland(
 fun AuraHeader(
     title: String,
     onProfileClick: () -> Unit = {},
+    /**
+     * Per-screen controls, rendered at the trailing edge of the same bar.
+     *
+     * This exists so a screen never needs its own second app bar. Chat previously
+     * stacked its TopAppBar under this one, which put "Main Chat" directly beneath
+     * "Aura / Chat" and burned ~90dp of vertical space restating the same idea.
+     */
+    actions: @Composable (RowScope.() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -112,9 +121,8 @@ fun AuraHeader(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp)
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(start = 16.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -147,8 +155,20 @@ fun AuraHeader(
                 fontWeight = FontWeight.SemiBold,
                 color = AuraTokens.TextPrimaryLight,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp)
             )
+
+            // Per-screen controls ride in this bar instead of a second one below it.
+            actions?.let { slot ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    content = slot
+                )
+            }
 
             Box(
                 modifier = Modifier

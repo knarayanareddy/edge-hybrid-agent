@@ -119,8 +119,8 @@ object MarkdownRenderer {
         var current = mutableListOf<String>()
         var inFence = false
 
-        fun flush() {
-            if (current.isNotEmpty()) blocks += Block(current.toList(), isFencedCode = false)
+        fun flush(isCode: Boolean = false) {
+            if (current.isNotEmpty()) blocks += Block(current.toList(), isFencedCode = isCode)
             current = mutableListOf()
         }
 
@@ -128,7 +128,7 @@ object MarkdownRenderer {
             val trimmed = line.trim()
             if (FENCE.containsMatchIn(trimmed)) {
                 if (inFence) {
-                    flush()                       // fence body is its own block
+                    flush(isCode = true)          // fence body is its own block
                     inFence = false
                 } else {
                     flush()                       // anything before the fence stands alone
@@ -157,8 +157,11 @@ object MarkdownRenderer {
         val line = raw.trim()
         when {
             line.startsWith("#") -> {
-                val level = line.takeWhile { it == '#' }.length.coerceIn(1, 6)
-                val text = line.drop(level).trim().trimEnd('#').trim()
+                val hashes = line.takeWhile { it == '#' }.length
+                val level = hashes.coerceIn(1, 6)
+                // drop the FULL run, not the clamped level, so `####### x` does not
+                // leave a stray '#' in the output.
+                val text = line.drop(hashes).trim().trimEnd('#').trim()
                 if (text.isEmpty()) return
                 pushStyle(
                     SpanStyle(
@@ -179,7 +182,8 @@ object MarkdownRenderer {
             }
 
             TASK_ITEM.containsMatchIn(line) -> {
-                val done = line.substring(2, 5).equals("x", ignoreCase = true)
+                // "- [x] text": index 3 is the checkbox glyph.
+                val done = line.length > 3 && line[3] == 'x'
                 pushStyle(SpanStyle(color = if (done) palette.accent else palette.muted))
                 append(if (done) "✓  " else "○  ")
                 pop()
@@ -218,6 +222,26 @@ object MarkdownRenderer {
     ) {
         var i = 0
         while (i < text.length) {
+            // Inline code outranks every other inline span. Without this, the `**`
+            // inside `` `**literal**` `` was consumed as bold before the parser
+            // ever reached the opening backtick.
+            if (text[i] == '`') {
+                val end = text.indexOf('`', i + 1)
+                if (end > 0) {
+                    pushStyle(
+                        SpanStyle(
+                            fontFamily = mono,
+                            fontSize = baseSize * 0.9f,
+                            background = palette.codeBackground
+                        )
+                    )
+                    append(text.substring(i + 1, end))
+                    pop()
+                    i = end + 1
+                    continue
+                }
+            }
+
             val bold = text.startsWith("**", i)
             val strike = text.startsWith("~~", i)
             val code = text[i] == '`'
@@ -233,11 +257,20 @@ object MarkdownRenderer {
                 val end = text.indexOf(closer, i + closer.length)
                 val inner = if (end > 0) text.substring(i + closer.length, end) else ""
 
-                // An unterminated or empty span is literal text, and an italic marker
-                // only styles when the run has no spaces - so `snake_case_names`
-                // survives intact instead of turning half the word italic.
+                // An unterminated or empty span stays literal.
+                //
+                // For `_`, intraword emphasis is forbidden, so `user_id_name` must
+                // survive intact. Checking for spaces was not enough: that run has
+                // none, and `id` was being italicised in the middle of the word.
+                val intrawordUnderscore = italic &&
+                    text[i] == '_' &&
+                    i > 0 && i + 1 < text.length &&
+                    text[i - 1].isLetterOrDigit() &&
+                    text[i + 1].isLetterOrDigit()
+
                 val styles = when {
                     end <= 0 || inner.isEmpty() -> null
+                    intrawordUnderscore -> null
                     italic && inner.contains(' ') -> null
                     else -> when {
                         bold -> SpanStyle(fontWeight = FontWeight.SemiBold)

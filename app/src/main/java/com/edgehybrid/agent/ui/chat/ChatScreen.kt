@@ -244,37 +244,7 @@ fun ChatScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = { onToggleDrawer(true) }) {
-                        Icon(Icons.Default.Share, contentDescription = "Conversations Switcher")
-                    }
-                },
-                title = {
-                    val activeSession = state.sessions.firstOrNull { it.id == state.currentSessionId }
-                    Text(
-                        text = activeSession?.title ?: "New conversation",
-                        fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable { onToggleDrawer(true) }
-                    )
-                },
-                actions = {
-                    IconButton(onClick = onNewChat) {
-                        Icon(Icons.Default.Add, contentDescription = "New Chat")
-                    }
-                    IconButton(onClick = onClearChat) {
-                        Icon(Icons.Default.Delete, contentDescription = "Clear Chat History")
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Check, contentDescription = "Settings")
-                    }
-                }
-            )
-        }
+        containerColor = MaterialTheme.colorScheme.surface
     ) { innerPadding ->
         Column(
             modifier = Modifier

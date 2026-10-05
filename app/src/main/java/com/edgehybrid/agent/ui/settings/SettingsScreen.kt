@@ -23,6 +23,8 @@ import com.edgehybrid.agent.data.local.LessonEntity
 import com.edgehybrid.agent.data.local.LessonsDao
 import com.edgehybrid.agent.data.local.SecureKeyStore
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.foundation.layout.Arrangement
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -363,11 +365,43 @@ fun SettingsScreen(
 
             if (lessons.isEmpty()) {
                 item {
-                    Text(
-                        "No lessons recorded yet. The agent logs rules automatically when failures or false positives occur.",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Psychology,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "No corrections learned yet",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                            Text(
+                                text = "When a tool call fails, you decline an action, or the " +
+                                    "provider rejects a request, the agent writes a rule here and " +
+                                    "carries it into every later prompt. Transient failures such as " +
+                                    "timeouts and rate limits are ignored so a bad network moment " +
+                                    "cannot permanently change its behaviour.",
+                                fontSize = 13.sp,
+                                lineHeight = 19.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             } else {
                 items(lessons) { lesson ->
