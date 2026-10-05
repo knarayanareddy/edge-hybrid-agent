@@ -36,7 +36,8 @@ class ProviderResolutionTest {
         val provider: String,
         val apiKey: String?,
         val baseUrl: String,
-        val sendsKeyAsQueryParam: Boolean
+        val sendsKeyAsQueryParam: Boolean,
+        val sendsBearerHeader: Boolean
     )
 
     private fun resolve(
@@ -66,9 +67,14 @@ class ProviderResolutionTest {
             provider = provider,
             apiKey = key,
             baseUrl = baseUrl,
-            // Google AI Studio carries the key in the query string; everything else uses a
-            // Bearer header. Getting this backwards yields a 400 that looks like a bad key.
-            sendsKeyAsQueryParam = isGoogle
+            // Google's OpenAI-COMPATIBLE endpoint ignores ?key= entirely and answers
+            // 400 "Missing or invalid Authorization header." on every request. Verified live:
+            //   ?key=VALUE  -> 400 "Missing or invalid Authorization header."
+            //   Bearer VALUE -> 400 "Please pass a valid API key"   (key was read)
+            // `?key=` belongs to the NATIVE .../models/{model}:generateContent endpoint, which
+            // this app does not call. So: never a query param, always a Bearer header.
+            sendsKeyAsQueryParam = false,
+            sendsBearerHeader = true
         )
     }
 
@@ -128,7 +134,12 @@ class ProviderResolutionTest {
         assertEquals(SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO, result.provider)
         assertEquals("AIzaTest", result.apiKey)
         assertEquals(SecureKeyStore.DEFAULT_GOOGLE_AI_STUDIO_ENDPOINT, result.baseUrl)
-        assertTrue("Google AI Studio must carry the key in the query", result.sendsKeyAsQueryParam)
+        // Regression guard for the 400 that shipped: the key must travel as a Bearer header.
+        assertFalse(
+            "Google AI Studio's OpenAI-compatible endpoint ignores ?key= and 400s without an Authorization header",
+            result.sendsKeyAsQueryParam
+        )
+        assertTrue("every provider must authenticate with an Authorization: Bearer header", result.sendsBearerHeader)
     }
 
     @Test

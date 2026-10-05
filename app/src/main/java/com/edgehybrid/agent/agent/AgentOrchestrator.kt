@@ -32,7 +32,12 @@ class AgentOrchestrator @Inject constructor(
     private val confirmationCoordinator: ConfirmationCoordinator,
     private val policy: AgentPolicy,
     private val clock: MonotonicClock,
-    private val suspendDelay: SuspendDelay
+    private val suspendDelay: SuspendDelay,
+    // Both were previously provided by Hilt and called by nobody: the lessons
+    // ledger had a full DAO-backed implementation that no code path ever read or
+    // wrote, so the "self-correcting" claim was inert. They are constructor deps
+    // precisely so they cannot be omitted again without a compile error.
+    private val contextProvider: AgentContextProvider
 ) : AgentLoop {
 
     override fun streamChat(history: List<ChatMessage>): Flow<AgentStreamEvent> =
@@ -55,6 +60,14 @@ class AgentOrchestrator @Inject constructor(
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (exception: Exception) {
+            // A provider 4xx means the REQUEST was wrong, which is durable and
+            // teachable: a bad model id or a malformed body stays wrong until
+            // something changes. 5xx/429 are the server being briefly unwell and are
+            // dropped by the classifier, so a provider blip cannot permanently
+            // degrade the agent's behaviour.
+            (exception as? ProviderHttpException)?.let { http ->
+                contextProvider.onProviderError(http.statusCode, http.responseSnippet)
+            }
             emit(AgentStreamEvent.Failed(exception.toUserMessage()))
         }
     }
@@ -66,14 +79,12 @@ class AgentOrchestrator @Inject constructor(
         val workingHistory = history.toMutableList()
         val hasSystemPrompt = workingHistory.any { it.role == ChatRoles.SYSTEM }
         if (!hasSystemPrompt) {
+            val lastUserText = workingHistory.lastOrNull { it.role == ChatRoles.USER }?.content.orEmpty()
             workingHistory.add(
                 0,
                 ChatMessage(
                     role = ChatRoles.SYSTEM,
-                    content = """You are Edge Hybrid Agent, an intelligent, helpful, and highly knowledgeable mobile AI assistant running on a Samsung Galaxy device.
-You can answer any questions, explain complex concepts, research companies, write code, brainstorm, and converse naturally on any topic.
-You also have access to native device tools and cloud skills (such as checking current weather, converting units, setting timers, or controlling device hardware).
-If a user asks a general question or asks about a company, place, or concept, answer it thoroughly, accurately, and conversationally using your broad general knowledge. Only call a tool when specifically needed."""
+                    content = contextProvider.buildSystemPrompt(lastUserText)
                 )
             )
         }
@@ -309,10 +320,15 @@ If a user asks a general question or asks about a company, place, or concept, an
                 execute = gated.execute
             )
 
-            is ConfirmationGate.GateResult.Rejected -> ToolExecutionOutcome(
-                content = declinedContent(gated.reason),
-                isError = true
-            )
+            is ConfirmationGate.GateResult.Rejected -> {
+                // The user declined. This is the most durable signal the agent gets:
+                // the action is unwanted, not broken. Previously discarded entirely.
+                contextProvider.onConfirmationRejected(call.function.name, gated.reason)
+                ToolExecutionOutcome(
+                    content = declinedContent(gated.reason),
+                    isError = true
+                )
+            }
 
             is ConfirmationGate.GateResult.NeedsApproval -> {
                 emit(
@@ -352,10 +368,15 @@ If a user asks a general question or asks about a company, place, or concept, an
                         execute = released.execute
                     )
 
-                    is ConfirmationGate.GateResult.Rejected -> ToolExecutionOutcome(
-                        content = declinedContent(released.reason),
-                        isError = true
-                    )
+                    is ConfirmationGate.GateResult.Rejected -> {
+                        // Declined AFTER the user was prompted, which is the stronger
+                        // signal: they saw the explanation and still said no.
+                        contextProvider.onConfirmationRejected(call.function.name, released.reason)
+                        ToolExecutionOutcome(
+                            content = declinedContent(released.reason),
+                            isError = true
+                        )
+                    }
 
                     is ConfirmationGate.GateResult.NeedsApproval -> ToolExecutionOutcome(
                         content = declinedContent("This action is no longer valid."),
@@ -372,12 +393,16 @@ If a user asks a general question or asks about a company, place, or concept, an
     ): ToolExecutionOutcome = try {
         ToolExecutionOutcome(content = execute(), isError = false)
     } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        // Never learn from a cancellation: the user navigated away, nothing failed.
         throw cancelled
     } catch (exception: Exception) {
+        // Every tool failure funnels through here, so this is the one place that
+        // has to feed the ledger. The classifier drops transient causes, so a
+        // network blip does not become a permanent rule in the system prompt.
+        val message = exception.message ?: "Tool failed"
+        contextProvider.onToolError(toolName, message, isError = true)
         ToolExecutionOutcome(
-            content = buildJsonObject {
-                put("error", exception.message ?: "Tool '$toolName' failed")
-            }.toString(),
+            content = buildJsonObject { put("error", message) }.toString(),
             isError = true
         )
     }

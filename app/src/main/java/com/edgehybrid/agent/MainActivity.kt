@@ -40,6 +40,9 @@ class MainActivity : ComponentActivity() {
     lateinit var lessonsDao: LessonsDao
 
     @Inject
+    lateinit var userSkillStore: com.edgehybrid.agent.skills.UserSkillStore
+
+    @Inject
     lateinit var skillLoader: SkillLoader
 
     @Inject
@@ -54,7 +57,8 @@ class MainActivity : ComponentActivity() {
                     keyStore = keyStore,
                     lessonsDao = lessonsDao,
                     skillLoader = skillLoader,
-                    mcpRegistry = mcpRegistry
+                    mcpRegistry = mcpRegistry,
+                    userSkillStore = userSkillStore
                 )
             }
         }
@@ -72,7 +76,8 @@ fun MainAppScreen(
     keyStore: SecureKeyStore,
     lessonsDao: LessonsDao,
     skillLoader: SkillLoader,
-    mcpRegistry: McpServerRegistry
+    mcpRegistry: McpServerRegistry,
+    userSkillStore: com.edgehybrid.agent.skills.UserSkillStore
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(TAB_CHAT) }
 
@@ -97,7 +102,7 @@ fun MainAppScreen(
                 onTabSelected = { selectedTab = it }
             )
         },
-        containerColor = AuraTokens.Surface
+        containerColor = AuraTokens.SurfaceLight
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -110,6 +115,7 @@ fun MainAppScreen(
                 TAB_SKILLS -> SkillsScreen(
                     skillLoader = skillLoader,
                     mcpRegistry = mcpRegistry,
+                    userSkillStore = userSkillStore,
                     onNavigateBack = { selectedTab = TAB_CHAT }
                 )
 

@@ -60,7 +60,7 @@ fun CanvasInspectorScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(AuraTokens.Surface)
+            .background(AuraTokens.SurfaceLight)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -72,7 +72,7 @@ fun CanvasInspectorScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(44.dp)
-                .background(AuraTokens.SurfaceContainerHigh, RoundedCornerShape(100.dp))
+                .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(100.dp))
                 .padding(4.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -83,7 +83,7 @@ fun CanvasInspectorScreen(
                         .weight(1f)
                         .height(36.dp)
                         .background(
-                            if (isSelected) AuraTokens.SurfaceContainerLowest else Color.Transparent,
+                            if (isSelected) AuraTokens.SurfaceSunkenLight else Color.Transparent,
                             RoundedCornerShape(100.dp)
                         )
                         .clickable { selectedSegment = index },
@@ -93,7 +93,7 @@ fun CanvasInspectorScreen(
                         text = title,
                         fontSize = 14.sp,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (isSelected) AuraTokens.OnSurface else AuraTokens.OnSurfaceVariant
+                        color = if (isSelected) AuraTokens.TextPrimaryLight else AuraTokens.TextSecondaryLight
                     )
                 }
             }
@@ -104,8 +104,8 @@ fun CanvasInspectorScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .shadow(4.dp, RoundedCornerShape(20.dp), spotColor = Color(0x0C000000))
-                .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(20.dp))
-                .border(1.dp, AuraTokens.SurfaceContainerHigh, RoundedCornerShape(20.dp))
+                .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(20.dp))
+                .border(1.dp, AuraTokens.SurfaceSunkenLight, RoundedCornerShape(20.dp))
                 .padding(14.dp)
         ) {
             // macOS dots and breadcrumb
@@ -123,12 +123,12 @@ fun CanvasInspectorScreen(
                     text = "CacheWorker > fetchWithFallback()",
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
-                    color = AuraTokens.OnSurfaceVariant
+                    color = AuraTokens.TextSecondaryLight
                 )
                 Text(
                     text = "UTF-8  Spaces: 2",
                     fontSize = 10.sp,
-                    color = AuraTokens.Outline
+                    color = AuraTokens.TextTertiaryLight
                 )
             }
 
@@ -156,7 +156,7 @@ fun CanvasInspectorScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
-                            if (isLine14) AuraTokens.SecondaryFixed.copy(alpha = 0.4f) else Color.Transparent,
+                            if (isLine14) AuraTokens.AccentSubtle.copy(alpha = 0.4f) else Color.Transparent,
                             RoundedCornerShape(6.dp)
                         )
                         .padding(vertical = 2.dp, horizontal = 4.dp),
@@ -166,7 +166,7 @@ fun CanvasInspectorScreen(
                         text = lineNum.padStart(2, ' '),
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
-                        color = if (isLine14) AuraTokens.Secondary else AuraTokens.OutlineVariant,
+                        color = if (isLine14) AuraTokens.AccentHover else AuraTokens.BorderLight,
                         modifier = Modifier.width(26.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -175,10 +175,10 @@ fun CanvasInspectorScreen(
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
                         color = when {
-                            isLine14 -> AuraTokens.TertiaryContainer
-                            lineContent.contains("export class") || lineContent.contains("async") -> AuraTokens.Secondary
-                            lineContent.contains("private") || lineContent.contains("const") -> AuraTokens.Primary
-                            else -> AuraTokens.OnSurface
+                            isLine14 -> AuraTokens.ErrorContainer
+                            lineContent.contains("export class") || lineContent.contains("async") -> AuraTokens.AccentHover
+                            lineContent.contains("private") || lineContent.contains("const") -> AuraTokens.Accent
+                            else -> AuraTokens.TextPrimaryLight
                         },
                         fontWeight = if (isLine14) FontWeight.Bold else FontWeight.Normal
                     )
@@ -193,8 +193,8 @@ fun CanvasInspectorScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .shadow(4.dp, RoundedCornerShape(16.dp), spotColor = Color(0x10000000))
-                        .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(16.dp))
-                        .border(1.dp, AuraTokens.PrimaryFixed, RoundedCornerShape(16.dp))
+                        .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(16.dp))
+                        .border(1.dp, AuraTokens.AccentSubtle, RoundedCornerShape(16.dp))
                         .padding(14.dp)
                 ) {
                     Row(
@@ -209,13 +209,13 @@ fun CanvasInspectorScreen(
                             Box(
                                 modifier = Modifier
                                     .size(28.dp)
-                                    .background(AuraTokens.SecondaryFixed, CircleShape),
+                                    .background(AuraTokens.AccentSubtle, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.AutoAwesome,
                                     contentDescription = "Patch",
-                                    tint = AuraTokens.Secondary,
+                                    tint = AuraTokens.AccentHover,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -223,29 +223,29 @@ fun CanvasInspectorScreen(
                                 text = "Apple Intelligence",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = AuraTokens.OnSurface
+                                color = AuraTokens.TextPrimaryLight
                             )
                             Box(
                                 modifier = Modifier
-                                    .background(AuraTokens.PrimaryFixed, RoundedCornerShape(100.dp))
+                                    .background(AuraTokens.AccentSubtle, RoundedCornerShape(100.dp))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = "Patch +1 / -0",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = AuraTokens.Primary
+                                    color = AuraTokens.Accent
                                 )
                             }
                         }
-                        Text(text = "Line 14", fontSize = 11.sp, color = AuraTokens.Outline)
+                        Text(text = "Line 14", fontSize = 11.sp, color = AuraTokens.TextTertiaryLight)
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Added 250ms fallback timeout to pre-empt edge cold-start latency spikes. Guarantees p99 response times stay sub-40ms.",
                         fontSize = 12.sp,
-                        color = AuraTokens.OnSurfaceVariant,
+                        color = AuraTokens.TextSecondaryLight,
                         lineHeight = 17.sp
                     )
 
@@ -259,13 +259,13 @@ fun CanvasInspectorScreen(
                             modifier = Modifier.weight(1f).height(40.dp),
                             shape = RoundedCornerShape(100.dp)
                         ) {
-                            Text("Dismiss", color = AuraTokens.OnSurface)
+                            Text("Dismiss", color = AuraTokens.TextPrimaryLight)
                         }
                         Button(
                             onClick = { patchAccepted = true },
                             modifier = Modifier.weight(1f).height(40.dp),
                             shape = RoundedCornerShape(100.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AuraTokens.Primary)
+                            colors = ButtonDefaults.buttonColors(containerColor = AuraTokens.Accent)
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
@@ -292,14 +292,14 @@ fun CanvasInspectorScreen(
                 title = "Memory Budget",
                 value = "14.2 MB",
                 delta = "Limit 128 MB",
-                deltaColor = AuraTokens.Outline,
+                deltaColor = AuraTokens.TextTertiaryLight,
                 modifier = Modifier.weight(1f)
             )
             MetricCard(
                 title = "Compilation",
                 value = "Clean",
                 delta = "0 warnings",
-                deltaColor = AuraTokens.Outline,
+                deltaColor = AuraTokens.TextTertiaryLight,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -313,22 +313,22 @@ fun CanvasInspectorScreen(
                 onClick = { },
                 modifier = Modifier.weight(1f).height(46.dp),
                 shape = RoundedCornerShape(100.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AuraTokens.SurfaceContainerHigh)
+                colors = ButtonDefaults.buttonColors(containerColor = AuraTokens.SurfaceSunkenLight)
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = AuraTokens.Primary, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = AuraTokens.Accent, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Run in Sandbox", color = AuraTokens.Primary, fontWeight = FontWeight.SemiBold)
+                Text("Run in Sandbox", color = AuraTokens.Accent, fontWeight = FontWeight.SemiBold)
             }
 
             Button(
                 onClick = { },
                 modifier = Modifier.weight(1f).height(46.dp),
                 shape = RoundedCornerShape(100.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AuraTokens.SurfaceContainerHigh)
+                colors = ButtonDefaults.buttonColors(containerColor = AuraTokens.SurfaceSunkenLight)
             ) {
-                Icon(Icons.Default.Description, contentDescription = null, tint = AuraTokens.OnSurfaceVariant, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Description, contentDescription = null, tint = AuraTokens.TextSecondaryLight, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Logs", color = AuraTokens.OnSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                Text("Logs", color = AuraTokens.TextSecondaryLight, fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -337,7 +337,7 @@ fun CanvasInspectorScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
-                .background(AuraTokens.SurfaceContainerHigh, RoundedCornerShape(100.dp))
+                .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(100.dp))
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -346,17 +346,17 @@ fun CanvasInspectorScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Default.Mic, contentDescription = "Voice", tint = AuraTokens.Secondary, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.Mic, contentDescription = "Voice", tint = AuraTokens.AccentHover, modifier = Modifier.size(20.dp))
                 Text(
                     text = "Ask Aura to optimize or modify cache...",
                     fontSize = 13.sp,
-                    color = AuraTokens.Outline
+                    color = AuraTokens.TextTertiaryLight
                 )
             }
             Box(
                 modifier = Modifier
                     .size(32.dp)
-                    .background(AuraTokens.Primary, CircleShape),
+                    .background(AuraTokens.Accent, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Default.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(16.dp))
@@ -378,13 +378,13 @@ fun MetricCard(
     Box(
         modifier = modifier
             .shadow(2.dp, RoundedCornerShape(16.dp), spotColor = Color(0x06000000))
-            .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(16.dp))
+            .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(16.dp))
             .padding(12.dp)
     ) {
         Column {
-            Text(text = title, fontSize = 10.sp, color = AuraTokens.Outline)
+            Text(text = title, fontSize = 10.sp, color = AuraTokens.TextTertiaryLight)
             Spacer(modifier = Modifier.height(2.dp))
-            Text(text = value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AuraTokens.OnSurface)
+            Text(text = value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AuraTokens.TextPrimaryLight)
             Spacer(modifier = Modifier.height(2.dp))
             Text(text = delta, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = deltaColor)
         }

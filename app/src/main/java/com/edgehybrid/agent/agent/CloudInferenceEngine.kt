@@ -118,6 +118,7 @@ class CloudInferenceEngine @Inject constructor(
     ) {
         var retryCount = 0
 
+        var currentKeyIndex = 0
         // Resolve provider, key and URL from SecureKeyStore (overrides build-time config)
         val provider = keyStore?.getPreferredProvider()
             ?: com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER
@@ -127,7 +128,7 @@ class CloudInferenceEngine @Inject constructor(
         val effectiveApiKey: String? = if (isGoogleAiStudio) {
             keyStore?.getGeminiApiKey()?.takeIf { it.isNotBlank() }
         } else {
-            keyStore?.getOpenRouterApiKey()?.takeIf { it.isNotBlank() } ?: settings.apiKey
+            keyStore?.getOpenRouterApiKey(currentKeyIndex)?.takeIf { it.isNotBlank() } ?: settings.apiKey
         }
 
         val effectiveBaseUrl: String = if (isGoogleAiStudio) {
@@ -136,26 +137,29 @@ class CloudInferenceEngine @Inject constructor(
             keyStore?.getCustomEndpoint()?.takeIf { it.isNotBlank() } ?: settings.baseUrl
         }
 
-        // For Google AI Studio the key goes as a query param; for others it's a Bearer header.
-        val effectiveUrl: String = if (isGoogleAiStudio && !effectiveApiKey.isNullOrBlank()) {
-            "${effectiveBaseUrl.trimEnd('/')}/chat/completions?key=$effectiveApiKey"
-        } else {
-            "${effectiveBaseUrl.trimEnd('/')}/chat/completions"
-        }
+        // FIX: Google's OpenAI-compatible endpoint ignores a `?key=` query parameter and
+        // answers `HTTP 400 {"error":{"message":"Missing or invalid Authorization header."}}`
+        // for EVERY request. Verified live against
+        // https://generativelanguage.googleapis.com/v1beta/openai/chat/completions:
+        //   ?key=VALUE  -> 400 "Missing or invalid Authorization header."  (key never read)
+        //   Bearer VALUE -> 400 "Please pass a valid API key"             (key accepted, rejected as invalid)
+        // The second message proves the header form is what actually delivers the credential.
+        // `?key=` belongs to the NATIVE endpoint (.../models/{model}:generateContent?key=...),
+        // which this app does not use.
+        val effectiveUrl: String = "${effectiveBaseUrl.trimEnd('/')}/chat/completions"
 
         while (true) {
             try {
                 httpClient.preparePost(effectiveUrl) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Text.EventStream)
-                    // Only send Bearer for non-GAS providers
-                    if (!isGoogleAiStudio) {
-                        effectiveApiKey
-                            ?.takeIf(String::isNotBlank)
-                            ?.let { key ->
-                                header(HttpHeaders.Authorization, "Bearer $key")
-                            }
-                    }
+                    // Every OpenAI-compatible endpoint, including Google's, authenticates
+                    // with an Authorization: Bearer header.
+                    effectiveApiKey
+                        ?.takeIf(String::isNotBlank)
+                        ?.let { key ->
+                            header(HttpHeaders.Authorization, "Bearer $key")
+                        }
                     setBody(request)
                 }.execute { response ->
                     val statusCode = response.status.value
@@ -207,6 +211,17 @@ class CloudInferenceEngine @Inject constructor(
                         statusCode = retryable.statusCode,
                         responseSnippet = "Retry limit exhausted"
                     )
+                }
+
+                // On 429: try the next OpenRouter key before giving up.
+                // This is the only way to recover from a per-key daily limit.
+                if (retryable.statusCode == 429) {
+                    val next = keyStore?.getNextOpenRouterKeyIndex(currentKeyIndex)
+                    if (next != null) {
+                        currentKeyIndex = next
+                        retryCount = 0
+                        continue
+                    }
                 }
 
                 suspendDelay.wait(retryable.delayMs)

@@ -13,6 +13,7 @@ import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -507,21 +509,42 @@ private fun MessageBubble(
             Arrangement.Start
         }
     ) {
+        // ChatGPT-style: the user gets a filled bubble, the assistant gets plain
+        // text on the canvas. Two filled cards of different colours read as a form;
+        // one filled and one bare reads as a conversation.
+        //
+        // Asymmetric corner radii point the bubble at its author — the tail corner
+        // is squared so the bubble visually grows out of the side it belongs to.
+        val bubbleShape = if (isUser) {
+            RoundedCornerShape(
+                topStart = 20.dp, topEnd = 20.dp,
+                bottomEnd = 6.dp, bottomStart = 20.dp
+            )
+        } else {
+            RoundedCornerShape(
+                topStart = 20.dp, topEnd = 20.dp,
+                bottomEnd = 20.dp, bottomStart = 6.dp
+            )
+        }
         Surface(
             color = if (isUser) {
                 MaterialTheme.colorScheme.primaryContainer
             } else {
-                MaterialTheme.colorScheme.surfaceContainer
+                Color.Transparent
             },
             contentColor = if (isUser) {
                 MaterialTheme.colorScheme.onPrimaryContainer
             } else {
                 MaterialTheme.colorScheme.onSurface
             },
-            shape = MaterialTheme.shapes.large,
+            shape = bubbleShape,
             modifier = Modifier
-                .fillMaxWidth(0.90f)
-                .widthIn(max = 620.dp)
+                // Assistant text is a document: cap the measure so lines stay
+                // readable, and let user bubbles stay narrow like real chat.
+                .widthIn(max = 680.dp)
+                .then(
+                    if (isUser) Modifier.fillMaxWidth(0.86f) else Modifier.fillMaxWidth()
+                )
         ) {
             Column(
                 modifier = Modifier.padding(
@@ -655,15 +678,32 @@ private fun MessageComposer(
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit
 ) {
-    Surface(
-        tonalElevation = 3.dp,
-        modifier = Modifier.fillMaxWidth()
+    // Apple-style floating composer: a rounded field that sits ON the canvas with a
+    // hairline ring, instead of a full-bleed raised slab. The removal of
+    // `tonalElevation` is deliberate — tonal elevation tinted the whole bar, which
+    // is the dated-Material tell. A 1dp outline plus a soft shadow reads cleaner
+    // and separates the input from content without a colour block.
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp)
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            shape = RoundedCornerShape(26.dp),
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant
+            ),
+            shadowElevation = 2.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            ) {
             // Attached Image Thumbnail Preview Bar
             if (attachedBitmap != null) {
                 Surface(
@@ -872,6 +912,7 @@ private fun MessageComposer(
                 }
             }
         }
+    }
     }
 }
 

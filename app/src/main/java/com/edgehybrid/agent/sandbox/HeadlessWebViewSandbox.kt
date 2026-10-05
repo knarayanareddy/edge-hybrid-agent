@@ -9,6 +9,8 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewAssetLoader
+import com.edgehybrid.agent.skills.UserScriptPathHandler
+import com.edgehybrid.agent.skills.UserSkillStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayInputStream
 import java.net.IDN
@@ -50,11 +52,16 @@ import kotlinx.serialization.json.JsonPrimitive
  */
 @Singleton
 class HeadlessWebViewSandbox @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val skillStore: UserSkillStore
 ) : ScriptSandbox {
 
     private val assetLoader = WebViewAssetLoader.Builder()
         .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(context))
+        // User-authored scripts are served from filesDir on the SAME origin, so
+        // editable skills do not widen the network policy or introduce a new
+        // origin the interceptor has to reason about.
+        .addPathHandler("/${UserScriptPathHandler.PATH_PREFIX}/", UserScriptPathHandler(context))
         .build()
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -63,11 +70,21 @@ class HeadlessWebViewSandbox @Inject constructor(
         inputJson: String,
         networkOrigins: List<String>
     ): Result<String> {
-        // Fail closed on anything that is not a bundled skill. This is checked before a
-        // WebView is created, so a crafted name never reaches the asset loader.
-        if (scriptName !in ALLOWED_SKILLS) {
+        // Fail closed on anything that is not a known, enabled skill. This is checked
+        // before a WebView is created, so a crafted name never reaches a path handler.
+        //
+        // The set is no longer a hardcoded constant: it is the enabled SCRIPT skills
+        // from the store, which is what makes skills editable. Bundled scripts are
+        // still included, and a user script still has to pass the handler's own
+        // name validation (id pattern, .js suffix, no separators) before it is read.
+        val knownScript = skillStore.skills.value.any {
+            it.kind == com.edgehybrid.agent.skills.UserSkill.Kind.SCRIPT &&
+                it.enabled &&
+                (it.id + ".js" == scriptName || it.id == scriptName.removeSuffix(".js"))
+        }
+        if (!knownScript) {
             return Result.failure(
-                IllegalArgumentException("Unknown skill: $scriptName")
+                IllegalArgumentException("Unknown or disabled skill: $scriptName")
             )
         }
 
@@ -362,10 +379,16 @@ class HeadlessWebViewSandbox @Inject constructor(
         private const val BLOCKED_BODY = "Blocked by Sandbox Security Policy"
 
         /**
-         * Bundled skills. A script outside this set is refused before any WebView work,
-         * so this list — not the asset loader — is the real boundary.
+         * Bundled skill filenames, kept for reference and for the Skills UI.
+         *
+         * This is NOT the execution boundary any more. It was the hardcoded
+         * three-item gate that made every skill immutable; enforcement now reads the
+         * enabled SCRIPT skills from [UserSkillStore], and [UserScriptPathHandler]
+         * independently re-validates the filename before touching the filesystem.
+         * Both layers must agree — the store decides *whether*, the handler decides
+         * *how it is read*.
          */
-        val ALLOWED_SKILLS = setOf(
+        val BUNDLED_SKILLS = setOf(
             "calculator.js",
             "device_info.js",
             "web_extract.js"

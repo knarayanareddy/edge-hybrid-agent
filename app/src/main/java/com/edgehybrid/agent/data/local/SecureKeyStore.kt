@@ -28,10 +28,38 @@ class SecureKeyStore @Inject constructor(
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    fun getOpenRouterApiKey(): String {
-        val saved = prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: ""
-        if (saved.isNotBlank()) return saved
-        return com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY.takeIf { it.isNotBlank() } ?: ""
+    fun getOpenRouterApiKey(): String = getOpenRouterApiKey(0)
+
+    /**
+     * Returns the OpenRouter API key at the given index, with rotation.
+     *
+     * Index 0 is the primary key (prefs > BuildConfig). Index > 0 reads from the
+     * numbered env vars (OPENROUTER_API_KEY_1, OPENROUTER_API_KEY_2, ...).
+     * This enables rotation on 429 errors: the caller increments the index and
+     * tries the next key without needing a new build.
+     */
+    fun getOpenRouterApiKey(index: Int): String {
+        return when (index) {
+            0 -> {
+                val saved = prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: ""
+                if (saved.isNotBlank()) saved
+                else com.edgehybrid.agent.BuildConfig.CLOUD_API_KEY.takeIf { it.isNotBlank() } ?: ""
+            }
+            else -> {
+                val envName = "OPENROUTER_API_KEY_$index"
+                System.getenv(envName)?.takeIf { it.isNotBlank() } ?: ""
+            }
+        }
+    }
+
+    /**
+     * Returns the next available OpenRouter key index after a 429, or -1 if
+     * exhausted. The caller is responsible for persisting the chosen index if
+     * it should stick across sessions.
+     */
+    fun getNextOpenRouterKeyIndex(currentIndex: Int): Int {
+        val next = currentIndex + 1
+        return if (getOpenRouterApiKey(next).isNotBlank()) next else -1
     }
     fun setOpenRouterApiKey(key: String) = prefs.edit().putString(KEY_OPENROUTER_API_KEY, key.trim()).apply()
 

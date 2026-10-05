@@ -6,6 +6,9 @@ import com.edgehybrid.agent.data.local.ChatDatabase
 import com.edgehybrid.agent.data.local.LessonsDao
 import com.edgehybrid.agent.data.local.NoteDao
 import com.edgehybrid.agent.data.local.VectorDao
+import com.edgehybrid.agent.memory.UserMemoryDao
+import com.edgehybrid.agent.skills.ProcedureSkillSource
+import com.edgehybrid.agent.skills.UserSkillStore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -42,4 +45,19 @@ object DatabaseModule {
     fun provideVectorDao(database: ChatDatabase): VectorDao {
         return database.vectorDao()
     }
+
+    @Provides
+    @Singleton
+    fun provideUserMemoryDao(database: ChatDatabase): UserMemoryDao {
+        return database.userMemoryDao()
+    }
+
+    /**
+     * Bound to the interface, not the class, so prompt assembly depends on the
+     * capability rather than on file storage. That is what lets
+     * `AgentContextProviderTest` verify the assembled prompt on the JVM.
+     */
+    @Provides
+    @Singleton
+    fun provideProcedureSkillSource(store: UserSkillStore): ProcedureSkillSource = store
 }

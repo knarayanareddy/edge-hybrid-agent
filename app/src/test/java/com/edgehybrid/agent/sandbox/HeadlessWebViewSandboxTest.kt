@@ -1,5 +1,6 @@
 package com.edgehybrid.agent.sandbox
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -79,15 +80,19 @@ class HeadlessWebViewSandboxTest {
     }
 
     @Test
-    fun `only the three bundled skills are allowed`() {
-        assertTrue("calculator.js" in HeadlessWebViewSandbox.ALLOWED_SKILLS)
-        assertTrue("device_info.js" in HeadlessWebViewSandbox.ALLOWED_SKILLS)
-        assertTrue("web_extract.js" in HeadlessWebViewSandbox.ALLOWED_SKILLS)
-        assertEquals3(HeadlessWebViewSandbox.ALLOWED_SKILLS)
+    fun `the three bundled scripts are shipped`() {
+        assertTrue("calculator.js" in HeadlessWebViewSandbox.BUNDLED_SKILLS)
+        assertTrue("device_info.js" in HeadlessWebViewSandbox.BUNDLED_SKILLS)
+        assertTrue("web_extract.js" in HeadlessWebViewSandbox.BUNDLED_SKILLS)
+        assertEquals(3, HeadlessWebViewSandbox.BUNDLED_SKILLS.size)
     }
 
+    // NOTE: this list is no longer the execution gate — that moved to
+    // UserSkillStore (which decides *whether*) plus UserScriptPathHandler (which
+    // decides *how a file is read*). The traversal cases are still worth asserting
+    // because the handler re-checks them independently.
     @Test
-    fun `traversal and unknown script names are not in the allowlist`() {
+    fun `traversal and unknown script names are not bundled skills`() {
         listOf(
             "../../databases/app.db",
             "../secrets.js",
@@ -96,16 +101,12 @@ class HeadlessWebViewSandboxTest {
             "Calculator.js",
             ""
         ).forEach { name ->
-            assertFalse("$name must not be allowed", name in HeadlessWebViewSandbox.ALLOWED_SKILLS)
+            assertFalse("$name must not be allowed", name in HeadlessWebViewSandbox.BUNDLED_SKILLS)
         }
     }
 
     @Test
     fun `the watchdog timeout is the documented five seconds`() {
         assertTrue(HeadlessWebViewSandbox.EXECUTION_TIMEOUT_MS == 5_000L)
-    }
-
-    private fun assertEquals3(actual: Set<String>) {
-        assertTrue("expected exactly 3 bundled skills, got ${actual.size}", actual.size == 3)
     }
 }

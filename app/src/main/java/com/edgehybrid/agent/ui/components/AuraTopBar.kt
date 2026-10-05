@@ -64,7 +64,7 @@ fun AuraDynamicIsland(
             modifier = Modifier
                 .width(136.dp)
                 .height(30.dp)
-                .background(AuraTokens.OnSurface, RoundedCornerShape(100.dp))
+                .background(AuraTokens.TextPrimaryLight, RoundedCornerShape(100.dp))
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -77,7 +77,7 @@ fun AuraDynamicIsland(
                     modifier = Modifier
                         .size(9.dp)
                         .scale(pulseScale)
-                        .background(AuraTokens.SecondaryContainer, CircleShape)
+                        .background(AuraTokens.AccentSubtle, CircleShape)
                 )
                 Text(
                     text = statusText,
@@ -105,7 +105,7 @@ fun AuraHeader(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(AuraTokens.Surface.copy(alpha = 0.95f))
+            .background(AuraTokens.SurfaceLight.copy(alpha = 0.95f))
     ) {
         AuraDynamicIsland()
         Row(
@@ -123,13 +123,13 @@ fun AuraHeader(
                 Box(
                     modifier = Modifier
                         .size(32.dp)
-                        .background(AuraTokens.PrimaryFixed, CircleShape),
+                        .background(AuraTokens.AccentSubtle, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = "Aura Spark",
-                        tint = AuraTokens.Primary,
+                        tint = AuraTokens.Accent,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -137,7 +137,7 @@ fun AuraHeader(
                     text = "Aura",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = AuraTokens.OnSurface
+                    color = AuraTokens.TextPrimaryLight
                 )
             }
 
@@ -145,7 +145,7 @@ fun AuraHeader(
                 text = title,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = AuraTokens.OnSurface,
+                color = AuraTokens.TextPrimaryLight,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -154,14 +154,14 @@ fun AuraHeader(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(AuraTokens.SurfaceContainerHigh)
+                    .background(AuraTokens.SurfaceSunkenLight)
                     .clickable { onProfileClick() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Person,
                     contentDescription = "Profile",
-                    tint = AuraTokens.OnSurfaceVariant,
+                    tint = AuraTokens.TextSecondaryLight,
                     modifier = Modifier.size(18.dp)
                 )
             }

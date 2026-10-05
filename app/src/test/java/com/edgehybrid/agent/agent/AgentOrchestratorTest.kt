@@ -25,6 +25,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.edgehybrid.agent.learning.LessonsLedgerManager
+import com.edgehybrid.agent.learning.PromptConstraintInjector
 
 class AgentOrchestratorTest {
 
@@ -127,7 +129,13 @@ class AgentOrchestratorTest {
             confirmationCoordinator = coordinator,
             policy = AgentPolicy(),
             clock = AtomicStepClock(),
-            suspendDelay = delay
+            suspendDelay = delay,
+            contextProvider = AgentContextProvider(
+                constraintInjector = PromptConstraintInjector(LessonsLedgerManager(NoLessonsDao)),
+                lessonsLedgerManager = LessonsLedgerManager(NoLessonsDao),
+                userMemoryDao = NoMemoryDao(),
+                skillSource = NoSkills
+            )
         )
     }
 

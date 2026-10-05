@@ -72,15 +72,15 @@ fun AuraBottomNavigationBar(
                     shape = RoundedCornerShape(100.dp),
                     spotColor = Color(0x22000000)
                 )
-                .background(AuraTokens.Surface.copy(alpha = 0.92f), RoundedCornerShape(100.dp))
-                .border(1.dp, AuraTokens.SurfaceContainerHigh, RoundedCornerShape(100.dp))
+                .background(AuraTokens.SurfaceLight.copy(alpha = 0.92f), RoundedCornerShape(100.dp))
+                .border(1.dp, AuraTokens.SurfaceSunkenLight, RoundedCornerShape(100.dp))
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceAround
         ) {
             AuraDestinations.forEachIndexed { index, destination ->
                 val isSelected = selectedTab == index
-                val color = if (isSelected) AuraTokens.Primary else AuraTokens.OnSurfaceVariant
+                val color = if (isSelected) AuraTokens.Accent else AuraTokens.TextSecondaryLight
                 val icon = if (isSelected) destination.selectedIcon else destination.unselectedIcon
 
                 Column(

@@ -56,7 +56,7 @@ fun ChatsLandingView(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(AuraTokens.Surface)
+            .background(AuraTokens.SurfaceLight)
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
@@ -67,14 +67,14 @@ fun ChatsLandingView(
                 text = "Good morning, Elena",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = AuraTokens.OnSurface,
+                color = AuraTokens.TextPrimaryLight,
                 letterSpacing = (-0.5).sp
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = "What would you like to create today?",
                 fontSize = 15.sp,
-                color = AuraTokens.OnSurfaceVariant
+                color = AuraTokens.TextSecondaryLight
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -85,7 +85,7 @@ fun ChatsLandingView(
                     .fillMaxWidth()
                     .height(52.dp)
                     .shadow(4.dp, RoundedCornerShape(100.dp), spotColor = Color(0x10000000))
-                    .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(100.dp))
+                    .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(100.dp))
                     .clickable { onStartNewChat() }
                     .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -98,19 +98,19 @@ fun ChatsLandingView(
                     Box(
                         modifier = Modifier
                             .size(28.dp)
-                            .background(AuraTokens.PrimaryFixed, CircleShape),
+                            .background(AuraTokens.AccentSubtle, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "New",
-                            tint = AuraTokens.Primary,
+                            tint = AuraTokens.Accent,
                             modifier = Modifier.size(16.dp)
                         )
                     }
                     Text(
                         text = "Ask Aura, draft Swift, sum...",
-                        color = AuraTokens.Outline,
+                        color = AuraTokens.TextTertiaryLight,
                         fontSize = 14.sp
                     )
                 }
@@ -122,14 +122,14 @@ fun ChatsLandingView(
                     Box(
                         modifier = Modifier
                             .size(34.dp)
-                            .background(AuraTokens.SurfaceContainer, CircleShape)
+                            .background(AuraTokens.SurfaceRaisedLight, CircleShape)
                             .clickable { onLaunchCamera() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.PhotoCamera,
                             contentDescription = "Camera",
-                            tint = AuraTokens.OnSurfaceVariant,
+                            tint = AuraTokens.TextSecondaryLight,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -137,7 +137,7 @@ fun ChatsLandingView(
                     Box(
                         modifier = Modifier
                             .size(34.dp)
-                            .background(AuraTokens.Primary, CircleShape),
+                            .background(AuraTokens.Accent, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -163,12 +163,12 @@ fun ChatsLandingView(
                         text = "Intelligence Actions",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = AuraTokens.OnSurface
+                        color = AuraTokens.TextPrimaryLight
                     )
                     Text(
                         text = "Customize",
                         fontSize = 13.sp,
-                        color = AuraTokens.Primary,
+                        color = AuraTokens.Accent,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -179,10 +179,10 @@ fun ChatsLandingView(
                 ) {
                     IntelligenceActionCard(
                         icon = Icons.Default.Edit,
-                        iconTint = AuraTokens.Secondary,
-                        iconBg = AuraTokens.SecondaryFixed,
+                        iconTint = AuraTokens.AccentHover,
+                        iconBg = AuraTokens.AccentSubtle,
                         badge = "●",
-                        badgeColor = AuraTokens.Secondary,
+                        badgeColor = AuraTokens.AccentHover,
                         title = "Writing Tools",
                         subtitle = "Rewrite tone &...",
                         modifier = Modifier.weight(1f),
@@ -190,10 +190,10 @@ fun ChatsLandingView(
                     )
                     IntelligenceActionCard(
                         icon = Icons.Default.Hub,
-                        iconTint = AuraTokens.Primary,
-                        iconBg = AuraTokens.PrimaryFixed,
+                        iconTint = AuraTokens.Accent,
+                        iconBg = AuraTokens.AccentSubtle,
                         badge = "98ms",
-                        badgeColor = AuraTokens.Primary,
+                        badgeColor = AuraTokens.Accent,
                         title = "Architecture",
                         subtitle = "Inspect distributed...",
                         modifier = Modifier.weight(1f),
@@ -207,10 +207,10 @@ fun ChatsLandingView(
                 ) {
                     IntelligenceActionCard(
                         icon = Icons.Default.Code,
-                        iconTint = AuraTokens.Tertiary,
-                        iconBg = AuraTokens.TertiaryFixed,
+                        iconTint = AuraTokens.Danger,
+                        iconBg = AuraTokens.AccentSubtle,
                         badge = "</>",
-                        badgeColor = AuraTokens.Tertiary,
+                        badgeColor = AuraTokens.Danger,
                         title = "Xcode Copilot",
                         subtitle = "SwiftUI & TypeScript...",
                         modifier = Modifier.weight(1f),
@@ -218,10 +218,10 @@ fun ChatsLandingView(
                     )
                     IntelligenceActionCard(
                         icon = Icons.Default.Palette,
-                        iconTint = AuraTokens.OnSurfaceVariant,
-                        iconBg = AuraTokens.SurfaceContainerHigh,
+                        iconTint = AuraTokens.TextSecondaryLight,
+                        iconBg = AuraTokens.SurfaceSunkenLight,
                         badge = "Canvas",
-                        badgeColor = AuraTokens.Secondary,
+                        badgeColor = AuraTokens.AccentHover,
                         title = "Visual Tokens",
                         subtitle = "Wireframes & iOS...",
                         modifier = Modifier.weight(1f),
@@ -237,7 +237,7 @@ fun ChatsLandingView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(4.dp, RoundedCornerShape(20.dp), spotColor = Color(0x0C000000))
-                    .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(20.dp))
+                    .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(20.dp))
                     .padding(16.dp)
             ) {
                 Row(
@@ -252,13 +252,13 @@ fun ChatsLandingView(
                         Box(
                             modifier = Modifier
                                 .size(28.dp)
-                                .background(AuraTokens.PrimaryFixed, CircleShape),
+                                .background(AuraTokens.AccentSubtle, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Speed,
                                 contentDescription = null,
-                                tint = AuraTokens.Primary,
+                                tint = AuraTokens.Accent,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -266,10 +266,10 @@ fun ChatsLandingView(
                             text = "Context Briefing",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = AuraTokens.OnSurface
+                            color = AuraTokens.TextPrimaryLight
                         )
                     }
-                    Text(text = "Just now", fontSize = 11.sp, color = AuraTokens.Outline)
+                    Text(text = "Just now", fontSize = 11.sp, color = AuraTokens.TextTertiaryLight)
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -277,7 +277,7 @@ fun ChatsLandingView(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(AuraTokens.SurfaceContainerLow, RoundedCornerShape(14.dp))
+                        .background(AuraTokens.SurfaceLight, RoundedCornerShape(14.dp))
                         .padding(12.dp)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -285,18 +285,18 @@ fun ChatsLandingView(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Box(modifier = Modifier.size(6.dp).background(AuraTokens.Primary, CircleShape))
+                            Box(modifier = Modifier.size(6.dp).background(AuraTokens.Accent, CircleShape))
                             Text(
                                 text = "Swift Concurrency Refactor",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = AuraTokens.OnSurface
+                                color = AuraTokens.TextPrimaryLight
                             )
                         }
                         Text(
                             text = "Aura isolated 3 potential actor race conditions inside AsyncSequenceStream.swift and drafted modern async-await wrappers.",
                             fontSize = 12.sp,
-                            color = AuraTokens.OnSurfaceVariant,
+                            color = AuraTokens.TextSecondaryLight,
                             lineHeight = 17.sp
                         )
                     }
@@ -312,19 +312,19 @@ fun ChatsLandingView(
                     Text(
                         text = "Suggested: Apply patch",
                         fontSize = 12.sp,
-                        color = AuraTokens.OnSurfaceVariant
+                        color = AuraTokens.TextSecondaryLight
                     )
                     Button(
                         onClick = { },
                         shape = RoundedCornerShape(100.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AuraTokens.PrimaryFixed),
+                        colors = ButtonDefaults.buttonColors(containerColor = AuraTokens.AccentSubtle),
                         modifier = Modifier.height(34.dp)
                     ) {
                         Text(
                             text = "Review Diffs",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = AuraTokens.Primary
+                            color = AuraTokens.Accent
                         )
                     }
                 }
@@ -343,12 +343,12 @@ fun ChatsLandingView(
                         text = "Recent Focus",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = AuraTokens.OnSurface
+                        color = AuraTokens.TextPrimaryLight
                     )
                     Text(
                         text = "${sessions.size.coerceAtLeast(4)} Active Sessions",
                         fontSize = 12.sp,
-                        color = AuraTokens.Outline
+                        color = AuraTokens.TextTertiaryLight
                     )
                 }
 
@@ -356,40 +356,40 @@ fun ChatsLandingView(
                     modifier = Modifier
                         .fillMaxWidth()
                         .shadow(2.dp, RoundedCornerShape(20.dp), spotColor = Color(0x08000000))
-                        .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(20.dp))
+                        .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(20.dp))
                 ) {
                     if (sessions.isEmpty()) {
                         RecentFocusRow(
                             icon = Icons.Default.Code,
-                            iconBg = AuraTokens.PrimaryFixed,
-                            iconTint = AuraTokens.Primary,
+                            iconBg = AuraTokens.AccentSubtle,
+                            iconTint = AuraTokens.Accent,
                             title = "ResilientEdgeCache.ts",
                             subtitle = "Distributed KV Tier • Modified 14m ago",
                             onClick = onStartNewChat
                         )
-                        Divider(color = AuraTokens.SurfaceContainer, modifier = Modifier.padding(start = 56.dp))
+                        Divider(color = AuraTokens.SurfaceRaisedLight, modifier = Modifier.padding(start = 56.dp))
                         RecentFocusRow(
                             icon = Icons.Default.Edit,
-                            iconBg = AuraTokens.SecondaryFixed,
-                            iconTint = AuraTokens.Secondary,
+                            iconBg = AuraTokens.AccentSubtle,
+                            iconTint = AuraTokens.AccentHover,
                             title = "Product Design Sprint",
                             subtitle = "Spatial Canvas • Modified 1h ago",
                             onClick = onStartNewChat
                         )
-                        Divider(color = AuraTokens.SurfaceContainer, modifier = Modifier.padding(start = 56.dp))
+                        Divider(color = AuraTokens.SurfaceRaisedLight, modifier = Modifier.padding(start = 56.dp))
                         RecentFocusRow(
                             icon = Icons.Default.Speed,
-                            iconBg = AuraTokens.TertiaryFixed,
-                            iconTint = AuraTokens.Tertiary,
+                            iconBg = AuraTokens.AccentSubtle,
+                            iconTint = AuraTokens.Danger,
                             title = "Distributed KV Store",
                             subtitle = "Latency benchmark telemetry • Yesterday",
                             onClick = onStartNewChat
                         )
-                        Divider(color = AuraTokens.SurfaceContainer, modifier = Modifier.padding(start = 56.dp))
+                        Divider(color = AuraTokens.SurfaceRaisedLight, modifier = Modifier.padding(start = 56.dp))
                         RecentFocusRow(
                             icon = Icons.Default.Psychology,
-                            iconBg = AuraTokens.SurfaceContainerHigh,
-                            iconTint = AuraTokens.OnSurfaceVariant,
+                            iconBg = AuraTokens.SurfaceSunkenLight,
+                            iconTint = AuraTokens.TextSecondaryLight,
                             title = "Cognitive Model Tuning",
                             subtitle = "Custom system prompt • 2 days ago",
                             onClick = onStartNewChat
@@ -398,14 +398,14 @@ fun ChatsLandingView(
                         sessions.take(6).forEachIndexed { index, session ->
                             RecentFocusRow(
                                 icon = if (index % 2 == 0) Icons.Default.Code else Icons.Default.Speed,
-                                iconBg = if (index % 2 == 0) AuraTokens.PrimaryFixed else AuraTokens.SecondaryFixed,
-                                iconTint = if (index % 2 == 0) AuraTokens.Primary else AuraTokens.Secondary,
+                                iconBg = if (index % 2 == 0) AuraTokens.AccentSubtle else AuraTokens.AccentSubtle,
+                                iconTint = if (index % 2 == 0) AuraTokens.Accent else AuraTokens.AccentHover,
                                 title = session.title,
                                 subtitle = "Session • Active Context",
                                 onClick = { onSelectSession(session.id) }
                             )
                             if (index < sessions.take(6).lastIndex) {
-                                Divider(color = AuraTokens.SurfaceContainer, modifier = Modifier.padding(start = 56.dp))
+                                Divider(color = AuraTokens.SurfaceRaisedLight, modifier = Modifier.padding(start = 56.dp))
                             }
                         }
                     }
@@ -418,7 +418,7 @@ fun ChatsLandingView(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(AuraTokens.SurfaceContainerLow, RoundedCornerShape(16.dp))
+                    .background(AuraTokens.SurfaceLight, RoundedCornerShape(16.dp))
                     .padding(horizontal = 14.dp, vertical = 12.dp)
             ) {
                 Row(
@@ -433,20 +433,20 @@ fun ChatsLandingView(
                         Icon(
                             imageVector = Icons.Default.Cloud,
                             contentDescription = null,
-                            tint = AuraTokens.Primary,
+                            tint = AuraTokens.Accent,
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
                             text = "Local Neural Cache: 1.84 GB Encrypted",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = AuraTokens.OnSurface
+                            color = AuraTokens.TextPrimaryLight
                         )
                     }
                     Text(
                         text = "Private Cloud Compute",
                         fontSize = 11.sp,
-                        color = AuraTokens.Outline
+                        color = AuraTokens.TextTertiaryLight
                     )
                 }
             }
@@ -471,7 +471,7 @@ fun IntelligenceActionCard(
         modifier = modifier
             .height(118.dp)
             .shadow(2.dp, RoundedCornerShape(18.dp), spotColor = Color(0x06000000))
-            .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(18.dp))
+            .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(18.dp))
             .clickable { onClick() }
             .padding(12.dp)
     ) {
@@ -510,14 +510,14 @@ fun IntelligenceActionCard(
                     text = title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = AuraTokens.OnSurface,
+                    color = AuraTokens.TextPrimaryLight,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitle,
                     fontSize = 12.sp,
-                    color = AuraTokens.OnSurfaceVariant,
+                    color = AuraTokens.TextSecondaryLight,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -565,21 +565,21 @@ fun RecentFocusRow(
                     text = title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = AuraTokens.OnSurface,
+                    color = AuraTokens.TextPrimaryLight,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitle,
                     fontSize = 12.sp,
-                    color = AuraTokens.OnSurfaceVariant
+                    color = AuraTokens.TextSecondaryLight
                 )
             }
         }
         Icon(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = "Open",
-            tint = AuraTokens.OutlineVariant,
+            tint = AuraTokens.BorderLight,
             modifier = Modifier.size(18.dp)
         )
     }

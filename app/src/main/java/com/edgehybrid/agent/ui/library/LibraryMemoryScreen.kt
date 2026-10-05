@@ -87,24 +87,24 @@ fun LibraryMemoryScreen(
                 category = "PREFERENCE",
                 meta = "Yesterday • Chat #42",
                 text = "Prefers TypeScript functional purity without mutations; enforces exhaustive pattern matching.",
-                tagColor = AuraTokens.Primary,
-                tagBg = AuraTokens.PrimaryFixed
+                tagColor = AuraTokens.Accent,
+                tagBg = AuraTokens.AccentSubtle
             ),
             MemoryFact(
                 id = "fact-2",
                 category = "CONTEXT",
                 meta = "Oct 14 • Project Kickoff",
                 text = "Leading the Core Cloud SDK migration targeting Node 22 ESM compatibility and Edge workers.",
-                tagColor = AuraTokens.Secondary,
-                tagBg = AuraTokens.SecondaryFixed
+                tagColor = AuraTokens.AccentHover,
+                tagBg = AuraTokens.AccentSubtle
             ),
             MemoryFact(
                 id = "fact-3",
                 category = "DIRECTIVE",
                 meta = "Sep 28 • Global Setup",
                 text = "Avoid boilerplate answers; prioritize benchmark graphs and sub-50ms execution paths.",
-                tagColor = AuraTokens.Tertiary,
-                tagBg = AuraTokens.TertiaryFixed
+                tagColor = AuraTokens.Danger,
+                tagBg = AuraTokens.AccentSubtle
             )
         )
     }
@@ -112,7 +112,7 @@ fun LibraryMemoryScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(AuraTokens.Surface)
+            .background(AuraTokens.SurfaceLight)
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
@@ -128,20 +128,20 @@ fun LibraryMemoryScreen(
                     text = "Library & Memory",
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
-                    color = AuraTokens.OnSurface,
+                    color = AuraTokens.TextPrimaryLight,
                     letterSpacing = (-0.5).sp
                 )
                 Box(
                     modifier = Modifier
                         .size(34.dp)
-                        .background(AuraTokens.SurfaceContainer, CircleShape)
+                        .background(AuraTokens.SurfaceRaisedLight, CircleShape)
                         .clickable { },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "Add Item",
-                        tint = AuraTokens.Primary,
+                        tint = AuraTokens.Accent,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -154,27 +154,27 @@ fun LibraryMemoryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp)
-                    .background(AuraTokens.SurfaceContainerHigh, RoundedCornerShape(12.dp))
+                    .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(12.dp))
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = "Search",
-                    tint = AuraTokens.Outline,
+                    tint = AuraTokens.TextTertiaryLight,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Search knowledge, memories, files...",
-                    color = AuraTokens.Outline,
+                    color = AuraTokens.TextTertiaryLight,
                     fontSize = 15.sp,
                     modifier = Modifier.weight(1f)
                 )
                 Icon(
                     imageVector = Icons.Default.Mic,
                     contentDescription = "Voice Search",
-                    tint = AuraTokens.Outline,
+                    tint = AuraTokens.TextTertiaryLight,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -186,7 +186,7 @@ fun LibraryMemoryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(4.dp, RoundedCornerShape(20.dp), spotColor = Color(0x10000000))
-                    .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(20.dp))
+                    .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(20.dp))
                     .padding(16.dp)
             ) {
                 Row(
@@ -201,13 +201,13 @@ fun LibraryMemoryScreen(
                         Box(
                             modifier = Modifier
                                 .size(44.dp)
-                                .background(AuraTokens.SecondaryFixed, RoundedCornerShape(14.dp)),
+                                .background(AuraTokens.AccentSubtle, RoundedCornerShape(14.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Psychology,
                                 contentDescription = "Neural Vector Index",
-                                tint = AuraTokens.OnSecondaryFixed,
+                                tint = AuraTokens.AccentHover,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -220,32 +220,32 @@ fun LibraryMemoryScreen(
                                     text = "Neural Vector Index",
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = AuraTokens.OnSurface
+                                    color = AuraTokens.TextPrimaryLight
                                 )
                                 Box(
                                     modifier = Modifier
                                         .size(7.dp)
-                                        .background(AuraTokens.SecondaryContainer, CircleShape)
+                                        .background(AuraTokens.AccentSubtle, CircleShape)
                                 )
                             }
                             Text(
                                 text = "1,428 embeddings indexed on-device",
                                 fontSize = 13.sp,
-                                color = AuraTokens.OnSurfaceVariant
+                                color = AuraTokens.TextSecondaryLight
                             )
                         }
                     }
 
                     Box(
                         modifier = Modifier
-                            .background(AuraTokens.SurfaceContainerHigh, RoundedCornerShape(100.dp))
+                            .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(100.dp))
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = "Ready",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = AuraTokens.Primary
+                            color = AuraTokens.Accent
                         )
                     }
                 }
@@ -265,14 +265,14 @@ fun LibraryMemoryScreen(
                         text = "WORKSPACES",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = AuraTokens.Outline,
+                        color = AuraTokens.TextTertiaryLight,
                         letterSpacing = 1.sp
                     )
                     Text(
                         text = "Edit",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = AuraTokens.Primary
+                        color = AuraTokens.Accent
                     )
                 }
 
@@ -280,28 +280,28 @@ fun LibraryMemoryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .shadow(2.dp, RoundedCornerShape(18.dp), spotColor = Color(0x08000000))
-                        .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(18.dp))
+                        .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(18.dp))
                 ) {
                     WorkspaceRow(
                         icon = Icons.Default.CloudDone,
-                        iconBg = AuraTokens.PrimaryFixed,
-                        iconTint = AuraTokens.Primary,
+                        iconBg = AuraTokens.AccentSubtle,
+                        iconTint = AuraTokens.Accent,
                         title = "Distributed Systems v3",
                         subtitle = "24 conversations • 8 files"
                     )
-                    Divider(color = AuraTokens.SurfaceContainer, modifier = Modifier.padding(start = 56.dp))
+                    Divider(color = AuraTokens.SurfaceRaisedLight, modifier = Modifier.padding(start = 56.dp))
                     WorkspaceRow(
                         icon = Icons.Default.Palette,
-                        iconBg = AuraTokens.SecondaryFixed,
-                        iconTint = AuraTokens.Secondary,
+                        iconBg = AuraTokens.AccentSubtle,
+                        iconTint = AuraTokens.AccentHover,
                         title = "Aura Design Tokens",
                         subtitle = "12 conversations • 19 files"
                     )
-                    Divider(color = AuraTokens.SurfaceContainer, modifier = Modifier.padding(start = 56.dp))
+                    Divider(color = AuraTokens.SurfaceRaisedLight, modifier = Modifier.padding(start = 56.dp))
                     WorkspaceRow(
                         icon = Icons.Default.MenuBook,
-                        iconBg = AuraTokens.TertiaryFixed,
-                        iconTint = AuraTokens.Tertiary,
+                        iconBg = AuraTokens.AccentSubtle,
+                        iconTint = AuraTokens.Danger,
                         title = "Attention & RAG Papers",
                         subtitle = "37 conversations • 34 PDFs"
                     )
@@ -322,13 +322,13 @@ fun LibraryMemoryScreen(
                         text = "APPLE INTELLIGENCE MEMORY",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = AuraTokens.Outline,
+                        color = AuraTokens.TextTertiaryLight,
                         letterSpacing = 1.sp
                     )
                     Text(
                         text = "On-Device Encrypted",
                         fontSize = 11.sp,
-                        color = AuraTokens.OnSurfaceVariant
+                        color = AuraTokens.TextSecondaryLight
                     )
                 }
 
@@ -337,7 +337,7 @@ fun LibraryMemoryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .shadow(2.dp, RoundedCornerShape(18.dp), spotColor = Color(0x08000000))
-                        .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(18.dp))
+                        .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(18.dp))
                         .padding(16.dp)
                 ) {
                     Row(
@@ -352,13 +352,13 @@ fun LibraryMemoryScreen(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .background(AuraTokens.SurfaceContainer, RoundedCornerShape(10.dp)),
+                                    .background(AuraTokens.SurfaceRaisedLight, RoundedCornerShape(10.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.AllInclusive,
                                     contentDescription = "Memory",
-                                    tint = AuraTokens.Primary,
+                                    tint = AuraTokens.Accent,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -367,12 +367,12 @@ fun LibraryMemoryScreen(
                                     text = "Continuous Memory",
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = AuraTokens.OnSurface
+                                    color = AuraTokens.TextPrimaryLight
                                 )
                                 Text(
                                     text = "Sync knowledge across conversations",
                                     fontSize = 13.sp,
-                                    color = AuraTokens.OnSurfaceVariant
+                                    color = AuraTokens.TextSecondaryLight
                                 )
                             }
                         }
@@ -382,7 +382,7 @@ fun LibraryMemoryScreen(
                             onCheckedChange = { continuousMemoryEnabled = it },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
-                                checkedTrackColor = AuraTokens.Primary
+                                checkedTrackColor = AuraTokens.Accent
                             )
                         )
                     }
@@ -391,7 +391,7 @@ fun LibraryMemoryScreen(
                     Text(
                         text = "Aura synthesizes persistent context locally. Insights are retained safely and can be pruned anytime.",
                         fontSize = 13.sp,
-                        color = AuraTokens.OnSurfaceVariant,
+                        color = AuraTokens.TextSecondaryLight,
                         lineHeight = 18.sp
                     )
                 }
@@ -403,7 +403,7 @@ fun LibraryMemoryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .shadow(2.dp, RoundedCornerShape(18.dp), spotColor = Color(0x08000000))
-                        .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(18.dp))
+                        .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(18.dp))
                 ) {
                     defaultFacts.forEachIndexed { index, fact ->
                         Row(
@@ -436,13 +436,13 @@ fun LibraryMemoryScreen(
                                     Text(
                                         text = fact.meta,
                                         fontSize = 11.sp,
-                                        color = AuraTokens.Outline
+                                        color = AuraTokens.TextTertiaryLight
                                     )
                                 }
                                 Text(
                                     text = fact.text,
                                     fontSize = 14.sp,
-                                    color = AuraTokens.OnSurface,
+                                    color = AuraTokens.TextPrimaryLight,
                                     lineHeight = 19.sp
                                 )
                             }
@@ -453,13 +453,13 @@ fun LibraryMemoryScreen(
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Delete",
-                                    tint = AuraTokens.Outline,
+                                    tint = AuraTokens.TextTertiaryLight,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
                         if (index < defaultFacts.lastIndex) {
-                            Divider(color = AuraTokens.SurfaceContainer, modifier = Modifier.padding(start = 14.dp))
+                            Divider(color = AuraTokens.SurfaceRaisedLight, modifier = Modifier.padding(start = 14.dp))
                         }
                     }
                 }
@@ -479,14 +479,14 @@ fun LibraryMemoryScreen(
                         text = "RECENT ARTIFACTS",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = AuraTokens.Outline,
+                        color = AuraTokens.TextTertiaryLight,
                         letterSpacing = 1.sp
                     )
                     Text(
                         text = "See All (18)",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = AuraTokens.Primary
+                        color = AuraTokens.Accent
                     )
                 }
 
@@ -496,8 +496,8 @@ fun LibraryMemoryScreen(
                 ) {
                     ArtifactTile(
                         icon = Icons.Default.Code,
-                        iconTint = AuraTokens.Primary,
-                        iconBg = AuraTokens.PrimaryFixed,
+                        iconTint = AuraTokens.Accent,
+                        iconBg = AuraTokens.AccentSubtle,
                         tag = "TS",
                         title = "authMiddleware.ts",
                         subtitle = "JWT validation",
@@ -507,8 +507,8 @@ fun LibraryMemoryScreen(
                     )
                     ArtifactTile(
                         icon = Icons.Default.Article,
-                        iconTint = AuraTokens.Secondary,
-                        iconBg = AuraTokens.SecondaryFixed,
+                        iconTint = AuraTokens.AccentHover,
+                        iconBg = AuraTokens.AccentSubtle,
                         tag = "MD",
                         title = "v2_architecture.md",
                         subtitle = "RFC doc",
@@ -526,8 +526,8 @@ fun LibraryMemoryScreen(
                 ) {
                     ArtifactTile(
                         icon = Icons.Default.BarChart,
-                        iconTint = AuraTokens.Tertiary,
-                        iconBg = AuraTokens.TertiaryFixed,
+                        iconTint = AuraTokens.Danger,
+                        iconBg = AuraTokens.AccentSubtle,
                         tag = "SVG",
                         title = "benchmarks_v3.svg",
                         subtitle = "Latency test",
@@ -542,8 +542,8 @@ fun LibraryMemoryScreen(
                         modifier = Modifier
                             .weight(1f)
                             .height(140.dp)
-                            .border(1.dp, AuraTokens.OutlineVariant, RoundedCornerShape(18.dp))
-                            .background(AuraTokens.SurfaceContainerLowest.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
+                            .border(1.dp, AuraTokens.BorderLight, RoundedCornerShape(18.dp))
+                            .background(AuraTokens.SurfaceSunkenLight.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
                             .clickable(enabled = false) { },
                         contentAlignment = Alignment.Center
                     ) {
@@ -551,7 +551,7 @@ fun LibraryMemoryScreen(
                             Box(
                                 modifier = Modifier
                                     .size(38.dp)
-                                    .background(AuraTokens.SurfaceContainer, CircleShape),
+                                    .background(AuraTokens.SurfaceRaisedLight, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -560,7 +560,7 @@ fun LibraryMemoryScreen(
                                     // skipped by screen readers rather than announced as
                                     // an action that does nothing.
                                     contentDescription = null,
-                                    tint = AuraTokens.Outline.copy(alpha = 0.4f),
+                                    tint = AuraTokens.TextTertiaryLight.copy(alpha = 0.4f),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -569,12 +569,12 @@ fun LibraryMemoryScreen(
                                 text = "Import File",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = AuraTokens.Outline.copy(alpha = 0.5f)
+                                color = AuraTokens.TextTertiaryLight.copy(alpha = 0.5f)
                             )
                             Text(
                                 text = "PDF, Code, Media",
                                 fontSize = 11.sp,
-                                color = AuraTokens.OnSurfaceVariant
+                                color = AuraTokens.TextSecondaryLight
                             )
                         }
                     }
@@ -623,21 +623,21 @@ fun WorkspaceRow(
                     text = title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = AuraTokens.OnSurface,
+                    color = AuraTokens.TextPrimaryLight,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitle,
                     fontSize = 12.sp,
-                    color = AuraTokens.OnSurfaceVariant
+                    color = AuraTokens.TextSecondaryLight
                 )
             }
         }
         Icon(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = "Open",
-            tint = AuraTokens.OutlineVariant,
+            tint = AuraTokens.BorderLight,
             modifier = Modifier.size(18.dp)
         )
     }
@@ -659,7 +659,7 @@ fun ArtifactTile(
         modifier = modifier
             .height(140.dp)
             .shadow(2.dp, RoundedCornerShape(18.dp), spotColor = Color(0x06000000))
-            .background(AuraTokens.SurfaceContainerLowest, RoundedCornerShape(18.dp))
+            .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(18.dp))
             .padding(12.dp)
     ) {
         Column(
@@ -686,14 +686,14 @@ fun ArtifactTile(
                 }
                 Box(
                     modifier = Modifier
-                        .background(AuraTokens.SurfaceContainerHigh, RoundedCornerShape(6.dp))
+                        .background(AuraTokens.SurfaceSunkenLight, RoundedCornerShape(6.dp))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
                         text = tag,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = AuraTokens.OnSurfaceVariant
+                        color = AuraTokens.TextSecondaryLight
                     )
                 }
             }
@@ -703,14 +703,14 @@ fun ArtifactTile(
                     text = title,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = AuraTokens.OnSurface,
+                    color = AuraTokens.TextPrimaryLight,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitle,
                     fontSize = 11.sp,
-                    color = AuraTokens.OnSurfaceVariant,
+                    color = AuraTokens.TextSecondaryLight,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -720,8 +720,8 @@ fun ArtifactTile(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(text = size, fontSize = 10.sp, color = AuraTokens.Outline)
-                Text(text = time, fontSize = 10.sp, color = AuraTokens.Outline)
+                Text(text = size, fontSize = 10.sp, color = AuraTokens.TextTertiaryLight)
+                Text(text = time, fontSize = 10.sp, color = AuraTokens.TextTertiaryLight)
             }
         }
     }
