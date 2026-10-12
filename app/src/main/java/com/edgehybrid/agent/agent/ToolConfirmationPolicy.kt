@@ -61,7 +61,10 @@ class ToolConfirmationPolicy @Inject constructor() {
             "list_installed_apps",
             "get_device_details",
             "get_samsung_capabilities",
-            "get_screen_elements"
+            "get_screen_elements",
+            // Multi-tiered skill catalog and procedural playbook hydration
+            "activate_skill",
+            "list_skill_domains"
         )
 
         val STRICT_TOOLS = setOf(

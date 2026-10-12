@@ -93,6 +93,12 @@ import com.edgehybrid.agent.R
 import com.edgehybrid.agent.hardware.vision.ImageCompressor
 import com.edgehybrid.agent.hardware.vision.MultimodalPromptEnricher
 import com.edgehybrid.agent.ui.components.ActionConfirmationDialog
+import com.edgehybrid.agent.ui.chat.components.ChatToolCard
+import com.edgehybrid.agent.ui.chat.components.MessageActionBar
+import com.edgehybrid.agent.ui.chat.components.ReasoningDisclosure
+import com.edgehybrid.agent.ui.chat.components.ReasoningParser
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -549,6 +555,19 @@ private fun MessageBubble(
                     }
                 }
 
+                val parsedContent = remember(message.content, isUser) {
+                    if (isUser) {
+                        ReasoningParser.parse(message.content)
+                    } else {
+                        ReasoningParser.parse(message.content)
+                    }
+                }
+
+                // ChatGPT o1/o3-style collapsible reasoning disclosure
+                if (!isUser && parsedContent.reasoningText != null) {
+                    ReasoningDisclosure(reasoningText = parsedContent.reasoningText)
+                }
+
                 SelectionContainer {
                     // Assistant replies are markdown; user input is not. Rendering both
                     // through the same parser would italicise a user's `snake_case`
@@ -558,7 +577,7 @@ private fun MessageBubble(
                             AnnotatedString(message.content)
                         } else {
                             MarkdownRenderer.markdown(
-                                message.content,
+                                parsedContent.cleanedAnswerText,
                                 MaterialTheme.typography.bodyLarge.fontSize
                             )
                         },
@@ -571,11 +590,20 @@ private fun MessageBubble(
                     )
                 }
 
+                // ChatGPT-style interactive tool execution cards
                 if (message.toolActivities.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     message.toolActivities.forEach { activity ->
-                        ToolActivityRow(activity)
+                        ChatToolCard(activity = activity)
                     }
+                }
+
+                // ChatGPT-style message action toolbar (Copy, Share, Regenerate)
+                if (!isUser && message.deliveryState == MessageDeliveryState.COMPLETE) {
+                    MessageActionBar(
+                        contentToCopy = parsedContent.cleanedAnswerText,
+                        onRegenerate = onRetry
+                    )
                 }
 
                 if (
@@ -665,6 +693,8 @@ private fun MessageComposer(
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit
 ) {
+    val haptics = LocalHapticFeedback.current
+
     // Apple-style floating composer: a rounded field that sits ON the canvas with a
     // hairline ring, instead of a full-bleed raised slab. The removal of
     // `tonalElevation` is deliberate — tonal elevation tinted the whole bar, which
@@ -877,7 +907,10 @@ private fun MessageComposer(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(
                         onSend = {
-                            if ((draft.isNotBlank() || attachedBitmap != null) && enabled) onSend()
+                            if ((draft.isNotBlank() || attachedBitmap != null) && enabled) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onSend()
+                            }
                         }
                     )
                 )
@@ -889,7 +922,10 @@ private fun MessageComposer(
                 val canSend = enabled && (draft.isNotBlank() || attachedBitmap != null)
                 if (isGenerating) {
                     FilledIconButton(
-                        onClick = onCancel,
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onCancel()
+                        },
                         modifier = Modifier.size(36.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -904,7 +940,10 @@ private fun MessageComposer(
                     }
                 } else {
                     FilledIconButton(
-                        onClick = onSend,
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onSend()
+                        },
                         enabled = canSend,
                         modifier = Modifier.size(36.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(

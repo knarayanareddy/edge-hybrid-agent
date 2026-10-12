@@ -33,7 +33,8 @@ open class AgentContextProvider @Inject constructor(
     private val constraintInjector: PromptConstraintInjector,
     private val lessonsLedgerManager: LessonsLedgerManager,
     private val userMemoryDao: UserMemoryDao,
-    private val skillSource: com.edgehybrid.agent.skills.ProcedureSkillSource
+    private val skillSource: com.edgehybrid.agent.skills.ProcedureSkillSource,
+    private val skillRegistry: com.edgehybrid.agent.skills.MultiTieredSkillRegistry
 ) {
 
     /**
@@ -48,9 +49,16 @@ open class AgentContextProvider @Inject constructor(
         // Lessons: corrective rules learned from this agent's own failures.
         val withLessons = constraintInjector.injectConstraints(base)
 
-        // Skills: procedural knowledge the user installed. Failure is swallowed to an
-        // empty block — a broken skill directory must not stop the agent answering.
-        val skillsBlock = runCatching { skillSource.procedureBlock() }.getOrDefault("")
+        // Skills: procedural knowledge the user installed, augmented by progressive skill domains.
+        val skillsBlock = runCatching {
+            val legacy = skillSource.procedureBlock()
+            val progressive = skillRegistry.buildProgressiveCatalog()
+            when {
+                legacy.isNotBlank() && progressive.isNotBlank() -> "$progressive\n\n$legacy"
+                progressive.isNotBlank() -> progressive
+                else -> legacy
+            }
+        }.getOrDefault("")
 
         // Memory: durable facts about the user, selected for THIS question.
         val memories = runCatching {

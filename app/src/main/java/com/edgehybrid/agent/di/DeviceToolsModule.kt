@@ -38,10 +38,18 @@ object DeviceToolsModule {
 
     @Provides
     @Singleton
+    fun provideMultiTieredSkillRegistry(
+        userSkillStore: com.edgehybrid.agent.skills.UserSkillStore
+    ): com.edgehybrid.agent.skills.MultiTieredSkillRegistry =
+        com.edgehybrid.agent.skills.MultiTieredSkillRegistry(userSkillStore)
+
+    @Provides
+    @Singleton
     fun provideSystemToolProvider(
         systemActions: SystemActionHandler,
-        samsungActions: SamsungActions
-    ): SystemToolProvider = SystemToolProvider(systemActions, samsungActions)
+        samsungActions: SamsungActions,
+        skillRegistry: com.edgehybrid.agent.skills.MultiTieredSkillRegistry
+    ): SystemToolProvider = SystemToolProvider(systemActions, samsungActions, skillRegistry)
 
     @Provides
     @Singleton

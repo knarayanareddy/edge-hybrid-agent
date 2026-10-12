@@ -60,7 +60,8 @@ class AgentContextProviderTest {
             userMemoryDao = NoMemoryDao(memories),
             skillSource = object : ProcedureSkillSource {
                 override suspend fun procedureBlock(): String = ""
-            }
+            },
+            skillRegistry = com.edgehybrid.agent.skills.MultiTieredSkillRegistry()
         )
 
     @Test

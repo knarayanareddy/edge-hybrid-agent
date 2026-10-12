@@ -33,13 +33,18 @@ import kotlinx.serialization.json.add
  * here that changes something is `CONFIRM`, and the pure queries are `AUTO_APPROVE`.
  */
 @Singleton
-class SystemToolProvider @Inject constructor(
+class SystemToolProvider(
     private val systemActions: SystemActionHandler,
-    private val samsungActions: SamsungActions
+    private val samsungActions: SamsungActions,
+    private val skillRegistry: com.edgehybrid.agent.skills.MultiTieredSkillRegistry? = null
 ) {
 
     /** Tool name constants, kept in one block so they cannot drift. */
     object Names {
+        // ---- multi-tiered skill system ----
+        const val ACTIVATE_SKILL = "activate_skill"
+        const val LIST_SKILL_DOMAINS = "list_skill_domains"
+
         // ---- queries ----
         const val GET_BATTERY = "get_battery_status"
         const val GET_STORAGE = "get_storage_status"
@@ -187,6 +192,21 @@ class SystemToolProvider @Inject constructor(
                 "action", "System action name: back, home, recents, notifications, quick_settings.", "string", required = true
             )
         )
+
+        // ---- multi-tiered skill system ----
+        add(
+            withArg(
+                Names.ACTIVATE_SKILL,
+                "Hydrate and load the full multi-step procedural playbook for a specific skill on demand.",
+                "skill_name", "Unique identifier of the skill playbook to load.", "string", required = true
+            )
+        )
+        add(
+            query(
+                Names.LIST_SKILL_DOMAINS,
+                "List all multi-tiered skill domains and the capabilities available under each domain."
+            )
+        )
     }
 
     /** Tool names this provider can execute. */
@@ -318,6 +338,10 @@ class SystemToolProvider @Inject constructor(
             Names.CLICK_SCREEN_COORDINATES -> executeClickScreenCoordinates(arguments)
             Names.TYPE_SCREEN_TEXT -> executeTypeScreenText(arguments)
             Names.PERFORM_SYSTEM_KEY -> executePerformSystemKey(arguments)
+
+            // ---- multi-tiered skill system ----
+            Names.ACTIVATE_SKILL -> executeActivateSkill(arguments)
+            Names.LIST_SKILL_DOMAINS -> executeListSkillDomains()
 
             else -> null
         }
@@ -546,5 +570,49 @@ class SystemToolProvider @Inject constructor(
             put("performed", success)
             put("status", if (success) "Performed system action '$action'" else "Failed to perform system action '$action'")
         }.let { ToolExecutionOutcome(it.toString(), !success) }
+    }
+
+    private fun executeActivateSkill(arguments: JsonObject): ToolExecutionOutcome {
+        val skillName = arguments.str("skill_name")
+            ?: throw SkillExecutionException("Skill name is required")
+        val content = kotlinx.coroutines.runBlocking { skillRegistry?.getPlaybookContent(skillName) }
+        return if (content != null) {
+            ok(
+                "playbook",
+                buildJsonObject {
+                    put("skill_name", skillName)
+                    put("status", "activated")
+                    put("playbook", content)
+                }.toString()
+            )
+        } else {
+            ok(
+                "playbook",
+                buildJsonObject {
+                    put("skill_name", skillName)
+                    put("status", "not_found")
+                    put("message", "No procedure playbook found for '$skillName'. Built-in tools can be invoked directly.")
+                }.toString()
+            )
+        }
+    }
+
+    private fun executeListSkillDomains(): ToolExecutionOutcome {
+        val domains = com.edgehybrid.agent.skills.MultiTieredSkillRegistry.SkillDomain.entries.map { domain ->
+            buildJsonObject {
+                put("domain", domain.name)
+                put("title", domain.title)
+                put("description", domain.description)
+            }
+        }
+        return ok(
+            "domains",
+            buildJsonObject {
+                put("count", domains.size)
+                put("domains", buildJsonArray {
+                    domains.forEach { add(it) }
+                })
+            }.toString()
+        )
     }
 }

@@ -134,7 +134,8 @@ class AgentOrchestratorTest {
                 constraintInjector = PromptConstraintInjector(LessonsLedgerManager(NoLessonsDao)),
                 lessonsLedgerManager = LessonsLedgerManager(NoLessonsDao),
                 userMemoryDao = NoMemoryDao(),
-                skillSource = NoSkills
+                skillSource = NoSkills,
+                skillRegistry = com.edgehybrid.agent.skills.MultiTieredSkillRegistry()
             )
         )
     }
