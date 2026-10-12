@@ -206,7 +206,58 @@ class CloudInferenceEngineTest {
         )
     }
 
+    @Test
+    fun `Google AI Studio normalizes model name by stripping google prefix`() = runTest {
+        var requestedModel = ""
+
+        val client = HttpClient(
+            MockEngine { request ->
+                val bodyText = (request.body as? io.ktor.http.content.OutgoingContent.ByteArrayContent)
+                    ?.bytes()?.let { String(it) } ?: ""
+                requestedModel = runCatching {
+                    testJson.parseToJsonElement(bodyText).jsonObject["model"]?.jsonPrimitive?.content
+                }.getOrNull().orEmpty()
+
+                respond(
+                    content = sseResponse(listOf(
+                        """{"choices":[{"index":0,"delta":{"content":"Response from Gemini 3.8 Flash"},"finish_reason":"stop"}]}"""
+                    )),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "text/event-stream")
+                )
+            }
+        ) {
+            expectSuccess = false
+            install(ContentNegotiation) { json(testJson) }
+        }
+
+        val engine = CloudInferenceEngine(
+            httpClient = client,
+            json = testJson,
+            settings = ProviderSettings(
+                baseUrl = com.edgehybrid.agent.data.local.SecureKeyStore.DEFAULT_GOOGLE_AI_STUDIO_ENDPOINT,
+                apiKey = "AIzaFakeKey",
+                model = "google/gemini-3.8-flash"
+            ),
+            policy = AgentPolicy(),
+            clock = StepClock(),
+            suspendDelay = RecordingDelay()
+        )
+
+        val events = engine.streamChat(
+            messages = listOf(ChatMessage(role = ChatRoles.USER, content = "Hello")),
+            tools = emptyList()
+        ).toList()
+
+        assertEquals("gemini-3.8-flash", requestedModel)
+        assertEquals(
+            "Response from Gemini 3.8 Flash",
+            events.filterIsInstance<CloudStreamEvent.AssistantDelta>().single().text
+        )
+    }
+
     // --- Helpers ---
+
 
     private fun makeEngine(client: HttpClient): CloudInferenceEngine =
         CloudInferenceEngine(

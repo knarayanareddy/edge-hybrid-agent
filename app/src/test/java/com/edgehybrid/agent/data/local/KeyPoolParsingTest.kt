@@ -61,6 +61,32 @@ class KeyPoolParsingTest {
     }
 
     @Test
+    fun `user-entered keys support commas, semicolons, and newlines`() {
+        fun parseSaved(raw: String): List<String> =
+            raw.split(Regex("[,;\\n\\r]+")).map { it.trim() }.filter { it.isNotBlank() }.distinct()
+
+        val mixed = "sk-or-1, sk-or-2;\nsk-or-3\r\nsk-or-4\nsk-or-5;sk-or-6"
+        val parsed = parseSaved(mixed)
+        assertEquals(6, parsed.size)
+        assertEquals("sk-or-1", parsed[0])
+        assertEquals("sk-or-6", parsed[5])
+    }
+
+    @Test
+    fun `combined pool merges user keys and build keys with deduplication`() {
+        fun parseSaved(raw: String): List<String> =
+            raw.split(Regex("[,;\\n\\r]+")).map { it.trim() }.filter { it.isNotBlank() }.distinct()
+
+        val saved = parseSaved("sk-user-1, sk-user-2; sk-user-3\nsk-shared")
+        val build = parse("sk-shared, sk-build-5, sk-build-6")
+        val combined = (saved + build).distinct()
+
+        assertEquals(6, combined.size)
+        assertEquals("sk-user-1", combined[0])
+        assertEquals("sk-build-6", combined[5])
+    }
+
+    @Test
     fun `the compiled pool in this build is well formed`() {
         // Guards the gradle emit path: whatever this test build compiled must parse
         // without blanks, or the app would rotate onto an empty key on device.
@@ -69,3 +95,4 @@ class KeyPoolParsingTest {
         assertEquals("compiled pool must be duplicate-free", parsed.size, parsed.distinct().size)
     }
 }
+

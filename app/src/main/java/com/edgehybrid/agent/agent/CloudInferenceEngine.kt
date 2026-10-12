@@ -120,7 +120,11 @@ class CloudInferenceEngine @Inject constructor(
         var currentKeyIndex = 0
         var currentRequest = request
         var currentProvider = keyStore?.getPreferredProvider()
-            ?: com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER
+            ?: if (settings.baseUrl.contains("generativelanguage.googleapis.com")) {
+                com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO
+            } else {
+                com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER
+            }
         var hasFallenBackFrom402 = false
 
         while (true) {
@@ -142,6 +146,12 @@ class CloudInferenceEngine @Inject constructor(
             val effectiveUrl: String = "${effectiveBaseUrl.trimEnd('/')}/chat/completions"
 
             try {
+                val requestToSend = if (isGoogleAiStudio && currentRequest.model.startsWith("google/")) {
+                    currentRequest.copy(model = currentRequest.model.removePrefix("google/"))
+                } else {
+                    currentRequest
+                }
+
                 httpClient.preparePost(effectiveUrl) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Text.EventStream)
@@ -150,7 +160,7 @@ class CloudInferenceEngine @Inject constructor(
                         ?.let { key ->
                             header(HttpHeaders.Authorization, "Bearer $key")
                         }
-                    setBody(currentRequest)
+                    setBody(requestToSend)
                 }.execute { response ->
                     val statusCode = response.status.value
 
@@ -163,6 +173,19 @@ class CloudInferenceEngine @Inject constructor(
                         )
                     }
 
+                    // Key routing on 401 (Invalid/expired key)
+                    if (statusCode == 401 && currentProvider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER) {
+                        val nextKey = keyStore?.getNextOpenRouterKeyIndex(currentKeyIndex) ?: -1
+                        if (nextKey >= 0) {
+                            android.util.Log.w(
+                                "CloudInferenceEngine",
+                                "OpenRouter key at index $currentKeyIndex returned HTTP 401. Rotating to key index $nextKey of ${keyStore?.getOpenRouterKeyCount()} available keys"
+                            )
+                            currentKeyIndex = nextKey
+                            throw RetryableProviderStatus(statusCode = 401, delayMs = 50L)
+                        }
+                    }
+
                     if (statusCode == 402) {
                         val bodySnippet = runCatching {
                             response.bodyAsText()
@@ -172,18 +195,38 @@ class CloudInferenceEngine @Inject constructor(
 
                         android.util.Log.e("CloudInferenceEngine", "HTTP 402 (Payment Required): $bodySnippet")
 
+                        // 1. Try rotating to the next OpenRouter key in the pool (e.g. 6 keys)
+                        if (currentProvider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER) {
+                            val nextKey = keyStore?.getNextOpenRouterKeyIndex(currentKeyIndex) ?: -1
+                            if (nextKey >= 0) {
+                                android.util.Log.w(
+                                    "CloudInferenceEngine",
+                                    "OpenRouter key at index $currentKeyIndex exhausted (HTTP 402). Rotating to next key index $nextKey of ${keyStore?.getOpenRouterKeyCount()} available keys"
+                                )
+                                currentKeyIndex = nextKey
+                                throw RetryableProviderStatus(statusCode = 402, delayMs = 50L)
+                            }
+                        }
+
+                        // 2. All keys in pool exhausted -> fall back to Google AI Studio or multimodal free tier
                         if (!hasFallenBackFrom402) {
                             hasFallenBackFrom402 = true
                             val geminiKey = keyStore?.getGeminiApiKey()?.trim().orEmpty()
                             if (currentProvider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER && geminiKey.isNotBlank()) {
-                                android.util.Log.w("CloudInferenceEngine", "OpenRouter balance depleted (402). Auto-switching to configured Google AI Studio with free gemini-2.5-flash")
+                                android.util.Log.w(
+                                    "CloudInferenceEngine",
+                                    "All OpenRouter keys exhausted (402). Auto-switching to configured Google AI Studio with free gemini-3.8-flash"
+                                )
                                 currentProvider = com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO
                                 keyStore?.setPreferredProvider(currentProvider)
-                                keyStore?.setSelectedCloudModel("gemini-2.5-flash")
-                                currentRequest = currentRequest.copy(model = "gemini-2.5-flash")
+                                keyStore?.setSelectedCloudModel("gemini-3.8-flash")
+                                currentRequest = currentRequest.copy(model = "gemini-3.8-flash")
                                 throw RetryableProviderStatus(statusCode = 402, delayMs = 100L)
                             } else if (!currentRequest.model.endsWith(":free")) {
-                                android.util.Log.w("CloudInferenceEngine", "OpenRouter balance depleted (402). Auto-switching to free model $FREE_FALLBACK_MODEL")
+                                android.util.Log.w(
+                                    "CloudInferenceEngine",
+                                    "All OpenRouter keys exhausted (402). Auto-switching to multimodal free model $FREE_FALLBACK_MODEL"
+                                )
                                 keyStore?.setSelectedCloudModel(FREE_FALLBACK_MODEL)
                                 currentRequest = currentRequest.copy(model = FREE_FALLBACK_MODEL)
                                 throw RetryableProviderStatus(statusCode = 402, delayMs = 100L)
@@ -192,7 +235,7 @@ class CloudInferenceEngine @Inject constructor(
 
                         throw ProviderHttpException(
                             statusCode = 402,
-                            responseSnippet = "OpenRouter balance is $0.00 (HTTP 402 Payment Required). Please select a free model (e.g. google/gemini-2.0-flash-exp:free) or top up credits at openrouter.ai/credits."
+                            responseSnippet = "OpenRouter balance is $0.00 across all keys (HTTP 402 Payment Required). Please select a free model (e.g. google/gemini-2.0-flash-exp:free) or top up credits."
                         )
                     }
 
@@ -229,7 +272,7 @@ class CloudInferenceEngine @Inject constructor(
                 }
                 return
             } catch (retryable: RetryableProviderStatus) {
-                if (retryable.statusCode == 402) {
+                if (retryable.statusCode == 402 || retryable.statusCode == 401) {
                     retryCount = 0
                     continue
                 }
@@ -244,6 +287,10 @@ class CloudInferenceEngine @Inject constructor(
                 if (retryable.statusCode == 429) {
                     val next = keyStore?.getNextOpenRouterKeyIndex(currentKeyIndex) ?: -1
                     if (next >= 0) {
+                        android.util.Log.w(
+                            "CloudInferenceEngine",
+                            "OpenRouter key at index $currentKeyIndex rate-limited (HTTP 429). Rotating to key $next of ${keyStore?.getOpenRouterKeyCount()} keys"
+                        )
                         currentKeyIndex = next
                         retryCount = 0
                         continue

@@ -45,25 +45,46 @@ class SecureKeyStore @Inject constructor(
             .filter { it.isNotBlank() }
             .distinct()
 
+    /**
+     * Parses user-entered keys from Settings (which may contain multiple keys
+     * separated by commas, semicolons, or newlines).
+     */
+    private fun savedKeyPool(): List<String> {
+        val saved = prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: ""
+        return saved.split(Regex("[,;\\n\\r]+"))
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    /**
+     * Unified list of all configured OpenRouter keys across Settings and BuildConfig.
+     */
+    fun allOpenRouterKeys(): List<String> {
+        val saved = savedKeyPool()
+        val build = keyPool()
+        return (saved + build).distinct()
+    }
+
+    /**
+     * Number of unique OpenRouter keys available in the rotation pool.
+     */
+    fun getOpenRouterKeyCount(): Int = allOpenRouterKeys().size
+
     fun getOpenRouterApiKey(index: Int): String {
         if (index < 0) return ""
-        // Slot 0 honours the in-app Settings value, which is the user's own override
-        // and should win over whatever the build compiled in.
-        if (index == 0) {
-            val saved = prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: ""
-            return if (saved.isNotBlank()) saved else keyPool().firstOrNull() ?: ""
-        }
+        val pool = allOpenRouterKeys()
+        if (index < pool.size) return pool[index]
         // System.getenv is empty on Android, so BuildConfig is the only real source
         // for the spares. The env lookup is kept for host-side unit tests.
         val fromEnv = runCatching { System.getenv("OPENROUTER_API_KEY_$index") }.getOrNull()
         if (!fromEnv.isNullOrBlank()) return fromEnv
-        return keyPool().getOrNull(index) ?: ""
+        return ""
     }
 
     /**
-     * Returns the next available OpenRouter key index after a 429, or -1 if
-     * exhausted. The caller is responsible for persisting the chosen index if
-     * it should stick across sessions.
+     * Returns the next available OpenRouter key index after a 429, 402, or 401,
+     * or -1 if exhausted.
      */
     fun getNextOpenRouterKeyIndex(currentIndex: Int): Int {
         val next = currentIndex + 1
@@ -302,7 +323,7 @@ class SecureKeyStore @Inject constructor(
 
         const val DEFAULT_CLOUD_MODEL = "google/gemini-3.8-flash"
         /** Google AI Studio model ID (no provider prefix) */
-        const val DEFAULT_GOOGLE_AI_STUDIO_MODEL = "gemini-2.5-flash"
+        const val DEFAULT_GOOGLE_AI_STUDIO_MODEL = "gemini-3.8-flash"
         const val DEFAULT_OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1"
         /** Google AI Studio OpenAI-compatible endpoint (requires ?key=API_KEY) */
         const val DEFAULT_GOOGLE_AI_STUDIO_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/openai"

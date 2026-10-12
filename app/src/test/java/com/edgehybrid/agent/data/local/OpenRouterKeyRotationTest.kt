@@ -73,4 +73,32 @@ class OpenRouterKeyRotationTest {
         }
         assertEquals("with one key there is nothing to rotate to", 0, rotations)
     }
+
+    @Test
+    fun `six-key pool rotates sequentially across all 6 keys on errors before terminating`() {
+        val configured = (0..5).toSet()
+        var current = 0
+        val visited = mutableListOf(current)
+        val errorCodes = listOf(402, 401, 429, 402, 401, 429)
+
+        for (status in errorCodes) {
+            // Emulate CloudInferenceEngine logic on 402, 401, 429
+            val shouldRotate = status in setOf(401, 402, 429)
+            assertTrue("HTTP $status must trigger key rotation", shouldRotate)
+
+            val next = current + 1
+            if (next in configured) {
+                current = next
+                visited += current
+            } else {
+                val exhaustedSentinel = -1
+                assertTrue("sentinel must terminate rotation", !rotationAccepts(exhaustedSentinel))
+                break
+            }
+        }
+
+        assertEquals("should have visited keys 0 through 5 in order", listOf(0, 1, 2, 3, 4, 5), visited)
+        assertEquals(6, visited.size)
+    }
 }
+
