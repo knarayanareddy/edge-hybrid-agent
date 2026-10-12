@@ -69,8 +69,16 @@ class ToolConfirmationPolicy @Inject constructor() {
             "get_screen_elements",
             // Multi-tiered skill catalog and procedural playbook hydration
             "activate_skill",
-            "list_skill_domains"
+            "list_skill_domains",
+            // Expanded on-device controls
+            "control_media",
+            "launch_app_by_name",
+            "open_notification_panel",
+            "open_quick_settings",
+            "scroll_screen",
+            "take_screenshot"
         )
+
 
         val STRICT_TOOLS = setOf(
             "send_sms",

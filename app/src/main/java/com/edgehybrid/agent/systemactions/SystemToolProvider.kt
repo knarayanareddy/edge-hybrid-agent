@@ -69,11 +69,15 @@ class SystemToolProvider(
         const val OPEN_SECURITY_SETTINGS = "open_security_settings"
         const val OPEN_STORAGE_SETTINGS = "open_storage_settings"
 
-        // ---- simple actions ----
+        // ---- simple actions & media ----
         const val SET_MEDIA_VOLUME = "set_media_volume"
+        const val CONTROL_MEDIA = "control_media"
         const val LAUNCH_APP = "launch_app"
+        const val LAUNCH_APP_BY_NAME = "launch_app_by_name"
         const val OPEN_GALLERY = "open_gallery"
         const val SHARE_TEXT = "share_text"
+        const val OPEN_NOTIFICATION_PANEL = "open_notification_panel"
+        const val OPEN_QUICK_SETTINGS = "open_quick_settings"
 
         // ---- mobile OS computer use (@oai/sky equivalent) ----
         const val GET_SCREEN_ELEMENTS = "get_screen_elements"
@@ -81,7 +85,11 @@ class SystemToolProvider(
         const val CLICK_SCREEN_COORDINATES = "click_screen_coordinates"
         const val TYPE_SCREEN_TEXT = "type_screen_text"
         const val PERFORM_SYSTEM_KEY = "perform_system_key"
+        const val SCROLL_SCREEN = "scroll_screen"
+        const val SWIPE_SCREEN = "swipe_screen"
+        const val TAKE_SCREENSHOT = "take_screenshot"
     }
+
 
     /** Every tool this provider contributes, in catalog order. */
     fun toolDefinitions(): List<ToolDefinition> = buildList {
@@ -120,11 +128,25 @@ class SystemToolProvider(
         )
         add(
             withArg(
+                Names.CONTROL_MEDIA, "Control background audio/media playback (play, pause, play_pause, next, previous, stop).",
+                "action", "Action to execute: play, pause, play_pause, next, previous, stop.", "string", required = true
+            )
+        )
+        add(
+            withArg(
                 Names.LAUNCH_APP, "Open an installed app by its package name.",
                 "package", "App package name, for example com.spotify.music.", "string", required = true
             )
         )
+        add(
+            withArg(
+                Names.LAUNCH_APP_BY_NAME, "Search and launch an installed app by friendly display name (e.g. Spotify, YouTube, WhatsApp, Camera, Maps).",
+                "name", "App display name or keyword to search and launch.", "string", required = true
+            )
+        )
         add(handoff(Names.OPEN_GALLERY, "Open the photo gallery."))
+        add(handoff(Names.OPEN_NOTIFICATION_PANEL, "Pull down the system notification shade."))
+        add(handoff(Names.OPEN_QUICK_SETTINGS, "Pull down the system Quick Settings panel."))
         add(
             withArg(
                 Names.SHARE_TEXT, "Open the Android share sheet with some text.",
@@ -192,6 +214,33 @@ class SystemToolProvider(
                 "action", "System action name: back, home, recents, notifications, quick_settings.", "string", required = true
             )
         )
+        add(
+            withArg(
+                Names.SCROLL_SCREEN, "Scroll the active screen forward/down or backward/up.",
+                "direction", "Scroll direction: down, up, forward, backward.", "string", required = false
+            )
+        )
+        add(
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = Names.SWIPE_SCREEN,
+                    description = "Dispatch a swipe gesture between start and end screen coordinates.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("startX", buildJsonObject { put("type", "number"); put("description", "Start X pixel.") })
+                            put("startY", buildJsonObject { put("type", "number"); put("description", "Start Y pixel.") })
+                            put("endX", buildJsonObject { put("type", "number"); put("description", "End X pixel.") })
+                            put("endY", buildJsonObject { put("type", "number"); put("description", "End Y pixel.") })
+                            put("durationMs", buildJsonObject { put("type", "integer"); put("description", "Duration in ms (default 300).") })
+                        })
+                        put("required", buildJsonArray { add("startX"); add("startY"); add("endX"); add("endY") })
+                        put("additionalProperties", false)
+                    }
+                )
+            )
+        )
+        add(query(Names.TAKE_SCREENSHOT, "Capture the current device display screenshot via system accessibility."))
 
         // ---- multi-tiered skill system ----
         add(
@@ -321,7 +370,11 @@ class SystemToolProvider(
                 }.let { ToolExecutionOutcome(it.toString(), !success) }
             }
 
+            Names.LAUNCH_APP_BY_NAME -> executeLaunchAppByName(arguments)
+            Names.CONTROL_MEDIA -> executeControlMedia(arguments)
             Names.OPEN_GALLERY -> opened(samsungActions.openGallery(), "gallery")
+            Names.OPEN_NOTIFICATION_PANEL -> opened(systemActions.openNotificationShade(), "notification shade")
+            Names.OPEN_QUICK_SETTINGS -> opened(systemActions.openQuickSettings(), "Quick Settings")
             Names.SHARE_TEXT -> {
                 val text = arguments.str("text")
                     ?: throw SkillExecutionException("Text to share is required")
@@ -338,12 +391,16 @@ class SystemToolProvider(
             Names.CLICK_SCREEN_COORDINATES -> executeClickScreenCoordinates(arguments)
             Names.TYPE_SCREEN_TEXT -> executeTypeScreenText(arguments)
             Names.PERFORM_SYSTEM_KEY -> executePerformSystemKey(arguments)
+            Names.SCROLL_SCREEN -> executeScrollScreen(arguments)
+            Names.SWIPE_SCREEN -> executeSwipeScreen(arguments)
+            Names.TAKE_SCREENSHOT -> executeTakeScreenshot()
 
             // ---- multi-tiered skill system ----
             Names.ACTIVATE_SKILL -> executeActivateSkill(arguments)
             Names.LIST_SKILL_DOMAINS -> executeListSkillDomains()
 
             else -> null
+
         }
     }
 
@@ -614,5 +671,85 @@ class SystemToolProvider(
                 })
             }.toString()
         )
+    }
+
+    private fun executeControlMedia(arguments: JsonObject): ToolExecutionOutcome {
+        val action = arguments.str("action")
+            ?: throw SkillExecutionException("Media action is required (play, pause, next, previous, stop)")
+        val success = systemActions.controlMedia(action)
+        return buildJsonObject {
+            put("action", action)
+            put("success", success)
+            put(
+                "status",
+                if (success) "Dispatched media action '$action'"
+                else "Could not dispatch media action '$action'"
+            )
+        }.let { ToolExecutionOutcome(it.toString(), !success) }
+    }
+
+    private fun executeLaunchAppByName(arguments: JsonObject): ToolExecutionOutcome {
+        val name = arguments.str("name")
+            ?: throw SkillExecutionException("App name is required")
+        val result = systemActions.launchAppByName(name)
+        val success = result.optBoolean("launched", false)
+        return ToolExecutionOutcome(result.toString(), !success)
+    }
+
+    private fun executeScrollScreen(arguments: JsonObject): ToolExecutionOutcome {
+        val direction = arguments.str("direction") ?: "down"
+        val service = com.edgehybrid.agent.hardware.accessibility.EdgeAccessibilityService.instance
+            ?: return ToolExecutionOutcome(
+                """{"error": "Accessibility service not active"}""",
+                isError = true
+            )
+        val success = service.scroll(direction)
+        return buildJsonObject {
+            put("direction", direction)
+            put("scrolled", success)
+            put("status", if (success) "Scrolled screen $direction" else "Could not scroll screen $direction")
+        }.let { ToolExecutionOutcome(it.toString(), !success) }
+    }
+
+    private fun executeSwipeScreen(arguments: JsonObject): ToolExecutionOutcome {
+        val startX = arguments["startX"]?.jsonPrimitive?.doubleOrNull?.toFloat()
+            ?: throw SkillExecutionException("startX is required")
+        val startY = arguments["startY"]?.jsonPrimitive?.doubleOrNull?.toFloat()
+            ?: throw SkillExecutionException("startY is required")
+        val endX = arguments["endX"]?.jsonPrimitive?.doubleOrNull?.toFloat()
+            ?: throw SkillExecutionException("endX is required")
+        val endY = arguments["endY"]?.jsonPrimitive?.doubleOrNull?.toFloat()
+            ?: throw SkillExecutionException("endY is required")
+        val durationMs = arguments["durationMs"]?.jsonPrimitive?.intOrNull?.toLong() ?: 300L
+
+        val service = com.edgehybrid.agent.hardware.accessibility.EdgeAccessibilityService.instance
+            ?: return ToolExecutionOutcome(
+                """{"error": "Accessibility service not active"}""",
+                isError = true
+            )
+        val success = kotlinx.coroutines.runBlocking {
+            service.swipe(startX, startY, endX, endY, durationMs)
+        }
+        return buildJsonObject {
+            put("startX", startX)
+            put("startY", startY)
+            put("endX", endX)
+            put("endY", endY)
+            put("swiped", success)
+            put("status", if (success) "Dispatched swipe gesture" else "Could not dispatch swipe gesture")
+        }.let { ToolExecutionOutcome(it.toString(), !success) }
+    }
+
+    private fun executeTakeScreenshot(): ToolExecutionOutcome {
+        val service = com.edgehybrid.agent.hardware.accessibility.EdgeAccessibilityService.instance
+            ?: return ToolExecutionOutcome(
+                """{"error": "Accessibility service not active"}""",
+                isError = true
+            )
+        val success = service.performSystemAction("take_screenshot")
+        return buildJsonObject {
+            put("screenshot_triggered", success)
+            put("status", if (success) "Captured screenshot via accessibility" else "Could not capture screenshot")
+        }.let { ToolExecutionOutcome(it.toString(), !success) }
     }
 }

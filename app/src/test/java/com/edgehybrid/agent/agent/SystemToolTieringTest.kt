@@ -27,7 +27,13 @@ class SystemToolTieringTest {
         "get_camera_hardware",
         "get_device_details",
         "get_samsung_capabilities",
-        "get_screen_elements"
+        "get_screen_elements",
+        "control_media",
+        "launch_app_by_name",
+        "open_notification_panel",
+        "open_quick_settings",
+        "scroll_screen",
+        "take_screenshot"
     )
 
     private val gatedDeviceTools = listOf(
@@ -48,8 +54,10 @@ class SystemToolTieringTest {
         "click_screen_element",
         "click_screen_coordinates",
         "type_screen_text",
-        "perform_system_key"
+        "perform_system_key",
+        "swipe_screen"
     )
+
 
     @Test
     fun `device queries are auto-approved`() {

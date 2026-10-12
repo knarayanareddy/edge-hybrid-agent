@@ -132,9 +132,22 @@ class CloudInferenceEngine @Inject constructor(
                 currentProvider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO
 
             val effectiveApiKey: String? = if (isGoogleAiStudio) {
-                keyStore?.getGeminiApiKey()?.takeIf { it.isNotBlank() }
+                keyStore?.getGeminiApiKey()?.takeIf { it.isNotBlank() } ?: settings.apiKey
             } else {
                 keyStore?.getOpenRouterApiKey(currentKeyIndex)?.takeIf { it.isNotBlank() } ?: settings.apiKey
+            }
+
+
+            if (isGoogleAiStudio && effectiveApiKey.isNullOrBlank() && !hasFallenBackFrom402) {
+                hasFallenBackFrom402 = true
+                android.util.Log.w(
+                    "CloudInferenceEngine",
+                    "No Google AI Studio key configured. Auto-falling back to OpenRouter free models ($FREE_FALLBACK_MODEL) with key pool"
+                )
+                currentProvider = com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER
+                currentKeyIndex = 0
+                currentRequest = currentRequest.copy(model = FREE_FALLBACK_MODEL)
+                continue
             }
 
             val effectiveBaseUrl: String = if (isGoogleAiStudio) {
@@ -247,6 +260,20 @@ class CloudInferenceEngine @Inject constructor(
                             .take(512)
 
                         android.util.Log.e("CloudInferenceEngine", "HTTP $statusCode: $bodySnippet")
+
+                        // Failover from Google AI Studio to OpenRouter free tier on any HTTP error
+                        if (currentProvider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO && !hasFallenBackFrom402) {
+                            hasFallenBackFrom402 = true
+                            android.util.Log.w(
+                                "CloudInferenceEngine",
+                                "Google AI Studio returned HTTP $statusCode ($bodySnippet). Auto-falling back to OpenRouter free models ($FREE_FALLBACK_MODEL) with 6-key routing"
+                            )
+                            currentProvider = com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER
+                            currentKeyIndex = 0
+                            currentRequest = currentRequest.copy(model = FREE_FALLBACK_MODEL)
+                            throw RetryableProviderStatus(statusCode = statusCode, delayMs = 100L)
+                        }
+
                         throw ProviderHttpException(
                             statusCode = statusCode,
                             responseSnippet = bodySnippet
@@ -278,6 +305,18 @@ class CloudInferenceEngine @Inject constructor(
                 }
 
                 if (retryCount >= policy.providerMaxRetries) {
+                    if (currentProvider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO && !hasFallenBackFrom402) {
+                        hasFallenBackFrom402 = true
+                        android.util.Log.w(
+                            "CloudInferenceEngine",
+                            "Google AI Studio retries exhausted. Auto-falling back to OpenRouter free models ($FREE_FALLBACK_MODEL) with key pool"
+                        )
+                        currentProvider = com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER
+                        currentKeyIndex = 0
+                        currentRequest = currentRequest.copy(model = FREE_FALLBACK_MODEL)
+                        retryCount = 0
+                        continue
+                    }
                     throw ProviderHttpException(
                         statusCode = retryable.statusCode,
                         responseSnippet = "Retry limit exhausted"

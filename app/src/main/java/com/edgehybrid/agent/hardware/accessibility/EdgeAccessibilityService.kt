@@ -225,4 +225,52 @@ class EdgeAccessibilityService : AccessibilityService() {
         "take_screenshot" -> performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT)
         else -> false
     }
+
+    /**
+     * Scrolls the screen forward/down or backward/up.
+     */
+    fun scroll(direction: String): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val action = when (direction.trim().lowercase()) {
+            "down", "forward", "next" -> AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+            "up", "backward", "prev" -> AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+            else -> AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+        }
+
+        fun findScrollable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+            if (node.isScrollable) return node
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                val found = findScrollable(child)
+                if (found != null) return found
+            }
+            return null
+        }
+
+        val scrollable = findScrollable(root)
+        if (scrollable != null && scrollable.performAction(action)) {
+            return true
+        }
+
+        val displayMetrics = resources.displayMetrics
+        val centerX = displayMetrics.widthPixels / 2f
+        val startY = if (action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) {
+            displayMetrics.heightPixels * 0.75f
+        } else {
+            displayMetrics.heightPixels * 0.25f
+        }
+        val endY = if (action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) {
+            displayMetrics.heightPixels * 0.25f
+        } else {
+            displayMetrics.heightPixels * 0.75f
+        }
+        val path = Path().apply {
+            moveTo(centerX, startY)
+            lineTo(centerX, endY)
+        }
+        val stroke = GestureDescription.StrokeDescription(path, 0, 300L)
+        val gesture = GestureDescription.Builder().addStroke(stroke).build()
+        return dispatchGesture(gesture, null, null)
+    }
 }
+

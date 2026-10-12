@@ -70,14 +70,14 @@ val cloudKeyPool = buildKeyPool(cloudApiKey)
 // Which provider the build defaults to. One of: openrouter, google_ai_studio.
 val cloudProvider = configurationValue(
     name = "EDGE_CLOUD_PROVIDER",
-    defaultValue = "openrouter"
+    defaultValue = "google_ai_studio"
 )
 val cloudModel = configurationValue(
     name = "EDGE_CLOUD_MODEL",
-    defaultValue = "google/gemini-3.8-flash"
+    defaultValue = "gemini-3.8-flash"
 )
 val typesafeApiKey = configurationValue("EDGE_TYPESAFE_API_KEY")
-val geminiApiKey = configurationValue("EDGE_GEMINI_API_KEY")
+val geminiApiKey = configurationValue("EDGE_GEMINI_API_KEY").ifBlank { configurationValue("GEMINI_API_KEY") }
 val groqApiKey = configurationValue("GROQ_API_KEY")
 val mcpEndpoint = configurationValue("EDGE_MCP_ENDPOINT")
 val mcpToken = configurationValue("EDGE_MCP_BEARER_TOKEN")

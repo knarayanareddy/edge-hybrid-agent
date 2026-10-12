@@ -256,7 +256,71 @@ class CloudInferenceEngineTest {
         )
     }
 
+    @Test
+    fun `Google AI Studio failure falls over to OpenRouter free tier`() = runTest {
+        val attempts = java.util.concurrent.atomic.AtomicInteger(0)
+        val requestedModels = mutableListOf<String>()
+
+        val client = HttpClient(
+            MockEngine { request ->
+                val bodyText = (request.body as? io.ktor.http.content.OutgoingContent.ByteArrayContent)
+                    ?.bytes()?.let { String(it) } ?: ""
+                val model = runCatching {
+                    testJson.parseToJsonElement(bodyText).jsonObject["model"]?.jsonPrimitive?.content
+                }.getOrNull().orEmpty()
+                requestedModels.add(model)
+
+                val attempt = attempts.incrementAndGet()
+                if (attempt == 1) {
+                    respond(
+                        content = """{"error":{"message":"API_KEY_INVALID","code":400}}""",
+                        status = HttpStatusCode.BadRequest,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                } else {
+                    respond(
+                        content = sseResponse(listOf(
+                            """{"choices":[{"index":0,"delta":{"content":"Fallback success"},"finish_reason":"stop"}]}"""
+                        )),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "text/event-stream")
+                    )
+                }
+            }
+        ) {
+            expectSuccess = false
+            install(ContentNegotiation) { json(testJson) }
+        }
+
+        val engine = CloudInferenceEngine(
+            httpClient = client,
+            json = testJson,
+            settings = ProviderSettings(
+                baseUrl = com.edgehybrid.agent.data.local.SecureKeyStore.DEFAULT_GOOGLE_AI_STUDIO_ENDPOINT,
+                apiKey = "AIzaBadKey",
+                model = "google/gemini-3.8-flash"
+            ),
+            policy = AgentPolicy(),
+            clock = StepClock(),
+            suspendDelay = RecordingDelay()
+        )
+
+        val events = engine.streamChat(
+            messages = listOf(ChatMessage(role = ChatRoles.USER, content = "Hello")),
+            tools = emptyList()
+        ).toList()
+
+        assertEquals(2, attempts.get())
+        assertEquals("gemini-3.8-flash", requestedModels[0])
+        assertEquals(CloudInferenceEngine.FREE_FALLBACK_MODEL, requestedModels[1])
+        assertEquals(
+            "Fallback success",
+            events.filterIsInstance<CloudStreamEvent.AssistantDelta>().single().text
+        )
+    }
+
     // --- Helpers ---
+
 
 
     private fun makeEngine(client: HttpClient): CloudInferenceEngine =

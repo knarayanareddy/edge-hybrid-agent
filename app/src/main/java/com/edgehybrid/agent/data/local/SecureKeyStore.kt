@@ -271,14 +271,14 @@ class SecureKeyStore @Inject constructor(
         val buildTime = com.edgehybrid.agent.BuildConfig.CLOUD_PROVIDER
         if (!buildTime.isNullOrBlank()) return normalizeProvider(buildTime)
 
-        return PROVIDER_OPENROUTER
+        return PROVIDER_GOOGLE_AI_STUDIO
     }
 
     /** Maps a provider name onto a supported constant, defaulting to OpenRouter. */
     private fun normalizeProvider(value: String): String = when (value.trim().lowercase()) {
         PROVIDER_GOOGLE_AI_STUDIO -> PROVIDER_GOOGLE_AI_STUDIO
         PROVIDER_OPENROUTER -> PROVIDER_OPENROUTER
-        else -> PROVIDER_OPENROUTER
+        else -> PROVIDER_GOOGLE_AI_STUDIO
     }
 
     fun setPreferredProvider(provider: String) =
@@ -321,7 +321,7 @@ class SecureKeyStore @Inject constructor(
         const val PROVIDER_OPENROUTER = "openrouter"
         const val PROVIDER_GOOGLE_AI_STUDIO = "google_ai_studio"
 
-        const val DEFAULT_CLOUD_MODEL = "google/gemini-3.8-flash"
+        const val DEFAULT_CLOUD_MODEL = "gemini-3.8-flash"
         /** Google AI Studio model ID (no provider prefix) */
         const val DEFAULT_GOOGLE_AI_STUDIO_MODEL = "gemini-3.8-flash"
         const val DEFAULT_OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1"

@@ -419,6 +419,95 @@ class SystemActionHandler @Inject constructor(
         }
     }
 
+    // ---------------------------------------------------------------- media & app controls
+
+    /**
+     * Controls active media playback (play, pause, next, previous, stop) via system AudioManager.
+     */
+    fun controlMedia(action: String): Boolean {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+        val keyCode = when (action.trim().lowercase()) {
+            "play" -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY
+            "pause" -> android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
+            "play_pause", "toggle" -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+            "next", "skip" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+            "previous", "prev" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            "stop" -> android.view.KeyEvent.KEYCODE_MEDIA_STOP
+            else -> return false
+        }
+        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode))
+        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode))
+        return true
+    }
+
+    /**
+     * Launches an installed application by searching for its friendly display label or package name.
+     */
+    fun launchAppByName(query: String): JSONObject {
+        val pm = context.packageManager
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val resolved = runCatching { pm.queryIntentActivities(intent, 0) }.getOrDefault(emptyList())
+        val needle = query.trim().lowercase()
+
+        // 1. Exact match on label
+        var matched = resolved.firstOrNull { it.loadLabel(pm).toString().trim().lowercase() == needle }
+        // 2. Starts with on label
+        if (matched == null) {
+            matched = resolved.firstOrNull { it.loadLabel(pm).toString().trim().lowercase().startsWith(needle) }
+        }
+        // 3. Contains on label
+        if (matched == null) {
+            matched = resolved.firstOrNull { it.loadLabel(pm).toString().trim().lowercase().contains(needle) }
+        }
+        // 4. Contains on package
+        if (matched == null) {
+            matched = resolved.firstOrNull { it.activityInfo.packageName.lowercase().contains(needle) }
+        }
+
+        if (matched == null) {
+            return JSONObject().apply {
+                put("launched", false)
+                put("status", "No installed app matched '$query'")
+            }
+        }
+
+        val pkg = matched.activityInfo.packageName
+        val label = matched.loadLabel(pm).toString()
+        val launchIntent = pm.getLaunchIntentForPackage(pkg)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val success = if (launchIntent != null) {
+            runCatching {
+                context.startActivity(launchIntent)
+                true
+            }.getOrDefault(false)
+        } else false
+
+        return JSONObject().apply {
+            put("launched", success)
+            put("label", label)
+            put("package", pkg)
+            put("status", if (success) "Launched $label ($pkg)" else "Could not launch $label ($pkg)")
+        }
+    }
+
+    /**
+     * Pulls down the system notification shade via accessibility, or opens notification listener settings.
+     */
+    fun openNotificationShade(): Boolean {
+        val accessibility = com.edgehybrid.agent.hardware.accessibility.EdgeAccessibilityService.instance
+        if (accessibility != null && accessibility.performSystemAction("notifications")) {
+            return true
+        }
+        return openSettingsScreen(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+    }
+
+    /**
+     * Pulls down system Quick Settings via accessibility.
+     */
+    fun openQuickSettings(): Boolean {
+        val accessibility = com.edgehybrid.agent.hardware.accessibility.EdgeAccessibilityService.instance
+        return accessibility?.performSystemAction("quick_settings") ?: false
+    }
+
     // ---------------------------------------------------------------- permissions
 
     fun hasPermission(permission: String): Boolean =
