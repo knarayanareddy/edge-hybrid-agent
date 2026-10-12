@@ -450,6 +450,8 @@ class ChatViewModel @Inject constructor(
                 val userFeedback = when {
                     exception.message?.contains("401", ignoreCase = true) == true ->
                         "Invalid API Key. Please configure your key in Settings."
+                    exception.message?.contains("402", ignoreCase = true) == true ->
+                        "Cloud account balance is $0.00 (HTTP 402 Payment Required). Please select a free model (e.g. Gemini Free) in Settings or top up OpenRouter credits."
                     exception.message?.contains("429", ignoreCase = true) == true ->
                         "Rate limit exceeded. Please wait a moment."
                     !exception.message.isNullOrBlank() ->

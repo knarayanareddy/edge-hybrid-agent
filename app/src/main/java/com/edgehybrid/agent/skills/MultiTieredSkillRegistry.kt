@@ -72,6 +72,10 @@ class MultiTieredSkillRegistry(
         register(SkillDescriptor("click_screen_coordinates", SkillDomain.DEVICE_OS, "Tap screen coordinates (x, y)", false))
         register(SkillDescriptor("type_screen_text", SkillDomain.DEVICE_OS, "Input text into focused screen element", false))
         register(SkillDescriptor("perform_system_key", SkillDomain.DEVICE_OS, "Trigger system Back, Home, or Recents", false))
+        register(SkillDescriptor("open_app", SkillDomain.DEVICE_OS, "Launch installed app by name", false))
+        register(SkillDescriptor("open_maps_navigation", SkillDomain.DEVICE_OS, "Turn-by-turn Google Maps navigation", false))
+        register(SkillDescriptor("open_web_url", SkillDomain.DEVICE_OS, "Open web link in device browser", false))
+        register(SkillDescriptor("vibrate_device", SkillDomain.DEVICE_OS, "Trigger device haptic feedback", true))
 
         // Web Research Domain
         register(SkillDescriptor("live_web_search", SkillDomain.WEB_RESEARCH, "Real-time web search for recent information", true))
@@ -87,6 +91,11 @@ class MultiTieredSkillRegistry(
         register(SkillDescriptor("set_timer", SkillDomain.PRODUCTIVITY, "Start an on-device countdown timer", false))
         register(SkillDescriptor("set_alarm", SkillDomain.PRODUCTIVITY, "Schedule an alarm in clock app", false))
         register(SkillDescriptor("send_sms", SkillDomain.PRODUCTIVITY, "Draft SMS in messaging app", false))
+        register(SkillDescriptor("copy_to_clipboard", SkillDomain.PRODUCTIVITY, "Copy text to clipboard", true))
+        register(SkillDescriptor("read_clipboard", SkillDomain.PRODUCTIVITY, "Read text from clipboard", true))
+        register(SkillDescriptor("read_device_file", SkillDomain.PRODUCTIVITY, "Read text file from internal storage", true))
+        register(SkillDescriptor("write_device_file", SkillDomain.PRODUCTIVITY, "Write text file to internal storage", false))
+        register(SkillDescriptor("list_device_files", SkillDomain.PRODUCTIVITY, "List stored internal files", true))
 
         // Sandbox & Compute Domain
         register(SkillDescriptor("calculate_math", SkillDomain.SANDBOX_CODE, "Evaluate formulas and math expressions", true))
@@ -110,7 +119,8 @@ class MultiTieredSkillRegistry(
 
         if (q.contains("screen") || q.contains("click") || q.contains("tap") || q.contains("app") ||
             q.contains("battery") || q.contains("ram") || q.contains("volume") || q.contains("phone") ||
-            q.contains("settings") || q.contains("display")
+            q.contains("settings") || q.contains("display") || q.contains("map") || q.contains("navigat") ||
+            q.contains("vibrat") || q.contains("launch")
         ) {
             activeDomains.add(SkillDomain.DEVICE_OS)
         }
@@ -122,7 +132,9 @@ class MultiTieredSkillRegistry(
         }
 
         if (q.contains("note") || q.contains("calendar") || q.contains("event") || q.contains("timer") ||
-            q.contains("alarm") || q.contains("sms") || q.contains("text") || q.contains("remind")
+            q.contains("alarm") || q.contains("sms") || q.contains("text") || q.contains("remind") ||
+            q.contains("clip") || q.contains("copy") || q.contains("paste") || q.contains("file") ||
+            q.contains("write")
         ) {
             activeDomains.add(SkillDomain.PRODUCTIVITY)
         }

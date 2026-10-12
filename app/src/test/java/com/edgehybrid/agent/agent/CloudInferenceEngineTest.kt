@@ -143,6 +143,69 @@ class CloudInferenceEngineTest {
         }
     }
 
+    @Test
+    fun `recovers from HTTP 402 by falling back to free model`() = runTest {
+        val attempts = java.util.concurrent.atomic.AtomicInteger(0)
+        val modelsRequested = mutableListOf<String>()
+
+        val client = HttpClient(
+            MockEngine { request ->
+                val bodyText = (request.body as? io.ktor.http.content.OutgoingContent.ByteArrayContent)
+                    ?.bytes()?.let { String(it) } ?: ""
+                val modelName = runCatching {
+                    testJson.parseToJsonElement(bodyText).jsonObject["model"]?.jsonPrimitive?.content
+                }.getOrNull().orEmpty()
+                modelsRequested.add(modelName)
+
+                val current = attempts.incrementAndGet()
+                if (current == 1) {
+                    respond(
+                        content = """{"error":{"message":"User has insufficient credits","code":402}}""",
+                        status = HttpStatusCode.PaymentRequired,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                } else {
+                    respond(
+                        content = sseResponse(listOf(
+                            """{"choices":[{"index":0,"delta":{"content":"Free model response"},"finish_reason":"stop"}]}"""
+                        )),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "text/event-stream")
+                    )
+                }
+            }
+        ) {
+            expectSuccess = false
+            install(ContentNegotiation) { json(testJson) }
+        }
+
+        val engine = CloudInferenceEngine(
+            httpClient = client,
+            json = testJson,
+            settings = ProviderSettings(
+                baseUrl = "https://cloud.example/v1",
+                apiKey = "test-key",
+                model = "google/gemini-3.8-flash"
+            ),
+            policy = AgentPolicy(),
+            clock = StepClock(),
+            suspendDelay = RecordingDelay()
+        )
+
+        val events = engine.streamChat(
+            messages = listOf(ChatMessage(role = ChatRoles.USER, content = "Hello")),
+            tools = emptyList()
+        ).toList()
+
+        assertEquals(2, attempts.get())
+        assertEquals("google/gemini-3.8-flash", modelsRequested[0])
+        assertEquals(CloudInferenceEngine.FREE_FALLBACK_MODEL, modelsRequested[1])
+        assertEquals(
+            "Free model response",
+            events.filterIsInstance<CloudStreamEvent.AssistantDelta>().single().text
+        )
+    }
+
     // --- Helpers ---
 
     private fun makeEngine(client: HttpClient): CloudInferenceEngine =

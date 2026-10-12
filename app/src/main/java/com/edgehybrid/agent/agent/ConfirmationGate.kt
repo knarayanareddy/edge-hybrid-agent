@@ -188,6 +188,11 @@ class ConfirmationGate @Inject constructor(
         "open_app_settings" -> "Open app settings"
         "set_media_volume" -> "Change media volume"
         "launch_app" -> "Open an app"
+        "open_app" -> "Open application"
+        "open_maps_navigation" -> "Start navigation"
+        "open_web_url" -> "Open web link"
+        "write_device_file" -> "Save file to device"
+        "copy_to_clipboard" -> "Copy to clipboard"
         "open_gallery" -> "Open gallery"
         "share_text" -> "Share text"
         "click_screen_element" -> "Click on-screen element"
@@ -228,6 +233,11 @@ class ConfirmationGate @Inject constructor(
             "open_app_settings" -> "This will open the settings page for an app."
             "set_media_volume" -> "This will change the media playback volume."
             "launch_app" -> "This will open an app on your phone."
+            "open_app" -> "This will open an app on your phone."
+            "open_maps_navigation" -> "This will launch Google Maps navigation to a destination."
+            "open_web_url" -> "This will open a link in your web browser."
+            "write_device_file" -> "This will save a file to the app's local storage."
+            "copy_to_clipboard" -> "This will copy text to your clipboard."
             "open_gallery" -> "This will open your photo gallery."
             "share_text" -> "This will open the share sheet with the given text."
             "click_screen_element" -> "This will tap the chosen UI element on your screen."
@@ -330,6 +340,23 @@ class ConfirmationGate @Inject constructor(
                 str("action_template")?.let {
                     details += ConfirmationDetail("Behaviour", it.preview(240))
                 }
+            }
+
+            "open_app" -> {
+                str("app_name")?.let { details += ConfirmationDetail("App", it) }
+            }
+
+            "open_maps_navigation" -> {
+                str("destination")?.let { details += ConfirmationDetail("Destination", it) }
+            }
+
+            "open_web_url" -> {
+                str("url")?.let { details += ConfirmationDetail("URL", it) }
+            }
+
+            "write_device_file" -> {
+                str("file_name")?.let { details += ConfirmationDetail("File", it) }
+                str("content")?.let { details += ConfirmationDetail("Content", it.preview(400)) }
             }
 
             "launch_app", "open_app_settings" -> {

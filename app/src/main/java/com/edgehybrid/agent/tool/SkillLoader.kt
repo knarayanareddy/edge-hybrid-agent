@@ -750,6 +750,166 @@ class BuiltInSkillLoader @Inject constructor(
                         put("additionalProperties", false)
                     }
                 )
+            ),
+            // 31. Copy to Clipboard
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = COPY_TO_CLIPBOARD_TOOL_NAME,
+                    description = "Copy text or data to the device system clipboard.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("text", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Text to copy to the clipboard.")
+                            })
+                            put("label", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Optional label for the clipboard item.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("text") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 32. Read Clipboard
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = READ_CLIPBOARD_TOOL_NAME,
+                    description = "Read the current text content from the device system clipboard.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {})
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 33. Open Application
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = OPEN_APP_TOOL_NAME,
+                    description = "Launch and open an installed app on the phone by name (e.g. 'YouTube', 'Google Maps', 'Spotify', 'Chrome', 'Gmail', 'Settings', 'Calculator', 'Camera', 'Files', 'WhatsApp').",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("app_name", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Common name or package name of the app to launch.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("app_name") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 34. Open Maps Navigation
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = OPEN_MAPS_NAVIGATION_TOOL_NAME,
+                    description = "Launch Google Maps turn-by-turn navigation directly to a destination address, city, landmark, or coordinates.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("destination", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Destination location, landmark, or address.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("destination") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 35. Open Web URL
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = OPEN_WEB_URL_TOOL_NAME,
+                    description = "Open an external web URL or website in the device's default web browser.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("url", buildJsonObject {
+                                put("type", "string")
+                                put("description", "The website URL to open in the browser.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("url") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 36. Read Device File
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = READ_DEVICE_FILE_TOOL_NAME,
+                    description = "Read text content from a saved file in the app's internal device storage.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("file_name", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Name of the file to read (e.g. 'notes.txt', 'recipe.md').")
+                            })
+                        })
+                        put("required", buildJsonArray { add("file_name") })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 37. Write Device File
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = WRITE_DEVICE_FILE_TOOL_NAME,
+                    description = "Create or write a text file to the app's internal device storage.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("file_name", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Name of the file to write (e.g. 'summary.txt', 'todo.md').")
+                            })
+                            put("content", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Text content to save into the file.")
+                            })
+                        })
+                        put("required", buildJsonArray {
+                            add("file_name")
+                            add("content")
+                        })
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 38. List Device Files
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = LIST_DEVICE_FILES_TOOL_NAME,
+                    description = "List all saved text and data files in the app's internal device storage.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {})
+                        put("additionalProperties", false)
+                    }
+                )
+            ),
+            // 39. Vibrate Device
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = VIBRATE_DEVICE_TOOL_NAME,
+                    description = "Trigger device physical haptic vibration feedback.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("duration_ms", buildJsonObject {
+                                put("type", "integer")
+                                put("description", "Vibration duration in milliseconds (default 200ms).")
+                            })
+                        })
+                        put("additionalProperties", false)
+                    }
+                )
             )
         )
 
@@ -827,6 +987,15 @@ class BuiltInSkillLoader @Inject constructor(
                 call.function.name == SET_ALARM_TOOL_NAME -> executeSetAlarm(call.function.arguments)
                 call.function.name == REGISTER_MCP_SERVER_TOOL_NAME -> executeRegisterMcpServer(call.function.arguments)
                 call.function.name == LIST_MCP_SERVERS_TOOL_NAME -> executeListMcpServers()
+                call.function.name == COPY_TO_CLIPBOARD_TOOL_NAME -> executeCopyToClipboard(call.function.arguments)
+                call.function.name == READ_CLIPBOARD_TOOL_NAME -> executeReadClipboard()
+                call.function.name == OPEN_APP_TOOL_NAME -> executeOpenApp(call.function.arguments)
+                call.function.name == OPEN_MAPS_NAVIGATION_TOOL_NAME -> executeOpenMapsNavigation(call.function.arguments)
+                call.function.name == OPEN_WEB_URL_TOOL_NAME -> executeOpenWebUrl(call.function.arguments)
+                call.function.name == READ_DEVICE_FILE_TOOL_NAME -> executeReadDeviceFile(call.function.arguments)
+                call.function.name == WRITE_DEVICE_FILE_TOOL_NAME -> executeWriteDeviceFile(call.function.arguments)
+                call.function.name == LIST_DEVICE_FILES_TOOL_NAME -> executeListDeviceFiles()
+                call.function.name == VIBRATE_DEVICE_TOOL_NAME -> executeVibrateDevice(call.function.arguments)
                 systemToolProvider.toolNames().contains(call.function.name) ->
                     systemToolProvider.execute(call.function.name, call.function.arguments)
                         ?: ToolExecutionOutcome(
@@ -1904,6 +2073,112 @@ class BuiltInSkillLoader @Inject constructor(
         return ToolExecutionOutcome(result.toString(), false)
     }
 
+    // 31. Copy to Clipboard
+    private suspend fun executeCopyToClipboard(arguments: JsonObject): ToolExecutionOutcome {
+        val text = arguments["text"]?.jsonPrimitive?.content ?: ""
+        val label = arguments["label"]?.jsonPrimitive?.content ?: "Agent Clipboard"
+        val success = nativeActionHandler.copyToClipboard(text, label)
+        val result = buildJsonObject {
+            put("copied", success)
+            put("characters", text.length)
+            put("status", if (success) "Text copied to clipboard successfully" else "Failed to copy text to clipboard")
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 32. Read Clipboard
+    private suspend fun executeReadClipboard(): ToolExecutionOutcome {
+        val content = nativeActionHandler.readClipboard()
+        val result = buildJsonObject {
+            put("content", content)
+            put("length", content.length)
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 33. Open App
+    private suspend fun executeOpenApp(arguments: JsonObject): ToolExecutionOutcome {
+        val appName = arguments["app_name"]?.jsonPrimitive?.content?.trim() ?: ""
+        val success = nativeActionHandler.openApp(appName)
+        val result = buildJsonObject {
+            put("app_name", appName)
+            put("opened", success)
+            put("status", if (success) "App '$appName' launched successfully" else "App '$appName' not found or could not be opened")
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 34. Open Maps Navigation
+    private suspend fun executeOpenMapsNavigation(arguments: JsonObject): ToolExecutionOutcome {
+        val destination = arguments["destination"]?.jsonPrimitive?.content?.trim() ?: ""
+        val success = nativeActionHandler.openMapsNavigation(destination)
+        val result = buildJsonObject {
+            put("destination", destination)
+            put("navigation_launched", success)
+            put("status", if (success) "Navigation launched for destination: $destination" else "Failed to launch navigation")
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 35. Open Web URL
+    private suspend fun executeOpenWebUrl(arguments: JsonObject): ToolExecutionOutcome {
+        val url = arguments["url"]?.jsonPrimitive?.content?.trim() ?: ""
+        val success = nativeActionHandler.openWebUrl(url)
+        val result = buildJsonObject {
+            put("url", url)
+            put("browser_launched", success)
+            put("status", if (success) "Browser opened to $url" else "Failed to open URL")
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 36. Read Device File
+    private suspend fun executeReadDeviceFile(arguments: JsonObject): ToolExecutionOutcome {
+        val fileName = arguments["file_name"]?.jsonPrimitive?.content?.trim() ?: ""
+        val content = nativeActionHandler.readDeviceFile(fileName)
+        val result = buildJsonObject {
+            put("file_name", fileName)
+            put("content", content)
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 37. Write Device File
+    private suspend fun executeWriteDeviceFile(arguments: JsonObject): ToolExecutionOutcome {
+        val fileName = arguments["file_name"]?.jsonPrimitive?.content?.trim() ?: ""
+        val content = arguments["content"]?.jsonPrimitive?.content ?: ""
+        val success = nativeActionHandler.writeDeviceFile(fileName, content)
+        val result = buildJsonObject {
+            put("file_name", fileName)
+            put("written", success)
+            put("bytes_written", content.toByteArray().size)
+            put("status", if (success) "File '$fileName' saved successfully" else "Failed to write file")
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 38. List Device Files
+    private suspend fun executeListDeviceFiles(): ToolExecutionOutcome {
+        val files = nativeActionHandler.listDeviceFiles()
+        val result = buildJsonObject {
+            put("file_count", files.size)
+            put("files", buildJsonArray { files.forEach { add(it) } })
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
+    // 39. Vibrate Device
+    private suspend fun executeVibrateDevice(arguments: JsonObject): ToolExecutionOutcome {
+        val durationMs = arguments["duration_ms"]?.jsonPrimitive?.intOrNull?.toLong() ?: 200L
+        val success = nativeActionHandler.vibrateDevice(durationMs)
+        val result = buildJsonObject {
+            put("vibrated", success)
+            put("duration_ms", durationMs)
+            put("status", if (success) "Device haptic feedback triggered" else "Vibrator not available or failed")
+        }
+        return ToolExecutionOutcome(result.toString(), false)
+    }
+
     companion object {
         const val WEATHER_TOOL_NAME = "get_current_weather"
         const val CONVERSION_TOOL_NAME = "convert_temperature"
@@ -1936,5 +2211,14 @@ class BuiltInSkillLoader @Inject constructor(
         const val SET_ALARM_TOOL_NAME = "set_alarm"
         const val REGISTER_MCP_SERVER_TOOL_NAME = "register_mcp_server"
         const val LIST_MCP_SERVERS_TOOL_NAME = "list_mcp_servers"
+        const val COPY_TO_CLIPBOARD_TOOL_NAME = "copy_to_clipboard"
+        const val READ_CLIPBOARD_TOOL_NAME = "read_clipboard"
+        const val OPEN_APP_TOOL_NAME = "open_app"
+        const val OPEN_MAPS_NAVIGATION_TOOL_NAME = "open_maps_navigation"
+        const val OPEN_WEB_URL_TOOL_NAME = "open_web_url"
+        const val READ_DEVICE_FILE_TOOL_NAME = "read_device_file"
+        const val WRITE_DEVICE_FILE_TOOL_NAME = "write_device_file"
+        const val LIST_DEVICE_FILES_TOOL_NAME = "list_device_files"
+        const val VIBRATE_DEVICE_TOOL_NAME = "vibrate_device"
     }
 }

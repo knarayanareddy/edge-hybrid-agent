@@ -156,4 +156,26 @@ class NewFeaturesIntegrationTest {
         viewModel.cancelGeneration()
         assertFalse(viewModel.uiState.value.isGenerating)
     }
+
+    @Test
+    fun testHttp402ShowsHelpfulUserDiagnostics() = runTest {
+        val failingAgentLoop = object : AgentLoop {
+            override fun streamChat(history: List<ChatMessage>): Flow<AgentStreamEvent> = flow {
+                throw com.edgehybrid.agent.agent.ProviderHttpException(402, "User has insufficient credits")
+            }
+            override fun continueAfterDisconnect(history: List<ChatMessage>, partialText: String): Flow<AgentStreamEvent> = streamChat(history)
+        }
+        val viewModel = ChatViewModel(agentLoop = failingAgentLoop, keyStore = null, chatDao = FakeChatDao())
+        advanceUntilIdle()
+
+        viewModel.send("Turn on flashlight")
+        advanceUntilIdle()
+
+        val assistantMessage = viewModel.uiState.value.messages.lastOrNull { it.role == ChatMessageRole.ASSISTANT }
+        org.junit.Assert.assertNotNull(assistantMessage)
+        assertTrue(
+            "Expected friendly HTTP 402 feedback, got: ${assistantMessage?.content}",
+            assistantMessage?.content?.contains("HTTP 402 Payment Required") == true
+        )
+    }
 }

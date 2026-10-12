@@ -424,6 +424,145 @@ class NativeActionHandler @Inject constructor(
         }
     }
 
+    suspend fun copyToClipboard(text: String, label: String = "Agent Clipboard"): Boolean = withContext(Dispatchers.Main) {
+        try {
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText(label, text)
+            cm?.setPrimaryClip(clip)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun readClipboard(): String = withContext(Dispatchers.Main) {
+        try {
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            val item = cm?.primaryClip?.getItemAt(0)
+            item?.text?.toString() ?: "Clipboard is empty"
+        } catch (_: Exception) {
+            "Unable to read clipboard"
+        }
+    }
+
+    suspend fun openApp(appName: String): Boolean = withContext(Dispatchers.IO) {
+        val pm = context.packageManager
+        val query = appName.trim().lowercase()
+
+        val wellKnownPackages = mapOf(
+            "youtube" to "com.google.android.youtube",
+            "maps" to "com.google.android.apps.maps",
+            "google maps" to "com.google.android.apps.maps",
+            "gmail" to "com.google.android.gm",
+            "whatsapp" to "com.whatsapp",
+            "telegram" to "org.telegram.messenger",
+            "spotify" to "com.spotify.music",
+            "chrome" to "com.android.chrome",
+            "camera" to "com.sec.android.app.camera",
+            "settings" to "com.android.settings",
+            "calculator" to "com.sec.android.app.popupcalculator",
+            "clock" to "com.sec.android.app.clockpackage",
+            "calendar" to "com.google.android.calendar",
+            "files" to "com.sec.android.app.myfiles"
+        )
+
+        wellKnownPackages[query]?.let { pkg ->
+            pm.getLaunchIntentForPackage(pkg)?.let { intent ->
+                if (launchExternalIntent(intent)) return@withContext true
+            }
+        }
+
+        val intent = Intent(Intent.ACTION_MAIN, null).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        val resolveInfos = pm.queryIntentActivities(intent, 0)
+        val matched = resolveInfos.firstOrNull {
+            it.loadLabel(pm).toString().lowercase().contains(query) ||
+            it.activityInfo.packageName.lowercase().contains(query)
+        }
+
+        if (matched != null) {
+            pm.getLaunchIntentForPackage(matched.activityInfo.packageName)?.let { launchIntent ->
+                return@withContext launchExternalIntent(launchIntent)
+            }
+        }
+
+        false
+    }
+
+    suspend fun openMapsNavigation(destination: String): Boolean = withContext(Dispatchers.IO) {
+        val uri = Uri.parse("google.navigation:q=" + Uri.encode(destination.trim()))
+        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+            setPackage("com.google.android.apps.maps")
+        }
+        if (launchExternalIntent(intent)) {
+            true
+        } else {
+            val webUri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=" + Uri.encode(destination.trim()))
+            launchExternalIntent(Intent(Intent.ACTION_VIEW, webUri))
+        }
+    }
+
+    suspend fun openWebUrl(url: String): Boolean = withContext(Dispatchers.IO) {
+        val targetUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
+        launchExternalIntent(Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)))
+    }
+
+    suspend fun readDeviceFile(fileName: String): String = withContext(Dispatchers.IO) {
+        try {
+            val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            val target = java.io.File(context.filesDir, safeName)
+            if (target.exists()) {
+                target.readText().take(16384)
+            } else {
+                "File '$safeName' not found in device storage."
+            }
+        } catch (e: Exception) {
+            "Error reading file: ${e.message}"
+        }
+    }
+
+    suspend fun writeDeviceFile(fileName: String, content: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            val target = java.io.File(context.filesDir, safeName)
+            target.writeText(content)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun listDeviceFiles(): List<String> = withContext(Dispatchers.IO) {
+        try {
+            context.filesDir.listFiles()
+                ?.filter { it.isFile && !it.name.endsWith(".db") && !it.name.endsWith(".db-wal") }
+                ?.map { "${it.name} (${it.length()} bytes)" }
+                ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun vibrateDevice(durationMs: Long = 200L): Boolean = withContext(Dispatchers.Main) {
+        try {
+            val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+                vm?.defaultVibrator
+            } else {
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            }
+            if (vibrator != null && vibrator.hasVibrator()) {
+                vibrator.vibrate(android.os.VibrationEffect.createOneShot(durationMs.coerceIn(50L, 1000L), android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                true
+            } else {
+                false
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     companion object {
         /** Shortest string we accept as a dialable number (e.g. emergency short codes). */
         const val MIN_DIALABLE_PHONE_LENGTH = 2

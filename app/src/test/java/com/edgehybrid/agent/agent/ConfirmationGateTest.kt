@@ -83,6 +83,10 @@ class ConfirmationGateTest {
         assertTrue(policy.isAutoApproved("calculate_math"))
         assertTrue(policy.isAutoApproved("search_contacts"))
         assertTrue(policy.isAutoApproved("live_web_search"))
+        assertTrue(policy.isAutoApproved("read_clipboard"))
+        assertTrue(policy.isAutoApproved("read_device_file"))
+        assertTrue(policy.isAutoApproved("list_device_files"))
+        assertTrue(policy.isAutoApproved("vibrate_device"))
     }
 
     @Test
@@ -98,6 +102,10 @@ class ConfirmationGateTest {
             "open_camera",
             "toggle_flashlight",
             "create_calendar_event",
+            "open_app",
+            "open_maps_navigation",
+            "open_web_url",
+            "write_device_file",
             "register_mcp_server",
             "skill:calculator.js",
             "some_tool_from_the_future"

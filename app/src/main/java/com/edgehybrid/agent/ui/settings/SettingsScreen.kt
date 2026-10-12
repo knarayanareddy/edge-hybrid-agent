@@ -179,6 +179,39 @@ fun SettingsScreen(
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (preferredProvider == SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO) {
+                        SuggestionChip(
+                            onClick = { selectedModel = "gemini-2.5-flash" },
+                            label = { Text("Gemini 2.5 Flash", fontSize = 11.sp) }
+                        )
+                        SuggestionChip(
+                            onClick = { selectedModel = "gemini-2.0-flash" },
+                            label = { Text("Gemini 2.0 Flash", fontSize = 11.sp) }
+                        )
+                        SuggestionChip(
+                            onClick = { selectedModel = "gemini-2.0-flash-exp" },
+                            label = { Text("Gemini Exp", fontSize = 11.sp) }
+                        )
+                    } else {
+                        SuggestionChip(
+                            onClick = { selectedModel = "google/gemini-2.0-flash-exp:free" },
+                            label = { Text("Gemini Free", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        )
+                        SuggestionChip(
+                            onClick = { selectedModel = "meta-llama/llama-3.3-70b-instruct:free" },
+                            label = { Text("Llama 3.3 Free", fontSize = 11.sp) }
+                        )
+                        SuggestionChip(
+                            onClick = { selectedModel = "google/gemini-3.8-flash" },
+                            label = { Text("Gemini 3.8", fontSize = 11.sp) }
+                        )
+                    }
+                }
             }
 
             // ── API Credentials ───────────────────────────────────────────

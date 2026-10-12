@@ -35,6 +35,20 @@ class MultiTieredSkillRegistryTest {
     }
 
     @Test
+    fun `domain classification correctly identifies navigation and app launch queries`() {
+        val registry = MultiTieredSkillRegistry()
+        val domains = registry.classifyDomainsForQuery("Navigate to Amsterdam Centraal on maps and launch Spotify")
+        assertTrue(domains.contains(MultiTieredSkillRegistry.SkillDomain.DEVICE_OS))
+    }
+
+    @Test
+    fun `domain classification correctly identifies clipboard and file queries`() {
+        val registry = MultiTieredSkillRegistry()
+        val domains = registry.classifyDomainsForQuery("Copy text to clipboard and save it to file notes.txt")
+        assertTrue(domains.contains(MultiTieredSkillRegistry.SkillDomain.PRODUCTIVITY))
+    }
+
+    @Test
     fun `domain classification returns all domains when query is generic`() {
         val registry = MultiTieredSkillRegistry()
         val domains = registry.classifyDomainsForQuery("Hello who are you?")

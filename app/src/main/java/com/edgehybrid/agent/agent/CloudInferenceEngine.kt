@@ -117,50 +117,40 @@ class CloudInferenceEngine @Inject constructor(
         onDelta: suspend (String) -> Unit
     ) {
         var retryCount = 0
-
         var currentKeyIndex = 0
-        // Resolve provider, key and URL from SecureKeyStore (overrides build-time config)
-        val provider = keyStore?.getPreferredProvider()
+        var currentRequest = request
+        var currentProvider = keyStore?.getPreferredProvider()
             ?: com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER
-        val isGoogleAiStudio =
-            provider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO
-
-        val effectiveApiKey: String? = if (isGoogleAiStudio) {
-            keyStore?.getGeminiApiKey()?.takeIf { it.isNotBlank() }
-        } else {
-            keyStore?.getOpenRouterApiKey(currentKeyIndex)?.takeIf { it.isNotBlank() } ?: settings.apiKey
-        }
-
-        val effectiveBaseUrl: String = if (isGoogleAiStudio) {
-            com.edgehybrid.agent.data.local.SecureKeyStore.DEFAULT_GOOGLE_AI_STUDIO_ENDPOINT
-        } else {
-            keyStore?.getCustomEndpoint()?.takeIf { it.isNotBlank() } ?: settings.baseUrl
-        }
-
-        // FIX: Google's OpenAI-compatible endpoint ignores a `?key=` query parameter and
-        // answers `HTTP 400 {"error":{"message":"Missing or invalid Authorization header."}}`
-        // for EVERY request. Verified live against
-        // https://generativelanguage.googleapis.com/v1beta/openai/chat/completions:
-        //   ?key=VALUE  -> 400 "Missing or invalid Authorization header."  (key never read)
-        //   Bearer VALUE -> 400 "Please pass a valid API key"             (key accepted, rejected as invalid)
-        // The second message proves the header form is what actually delivers the credential.
-        // `?key=` belongs to the NATIVE endpoint (.../models/{model}:generateContent?key=...),
-        // which this app does not use.
-        val effectiveUrl: String = "${effectiveBaseUrl.trimEnd('/')}/chat/completions"
+        var hasFallenBackFrom402 = false
 
         while (true) {
+            val isGoogleAiStudio =
+                currentProvider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO
+
+            val effectiveApiKey: String? = if (isGoogleAiStudio) {
+                keyStore?.getGeminiApiKey()?.takeIf { it.isNotBlank() }
+            } else {
+                keyStore?.getOpenRouterApiKey(currentKeyIndex)?.takeIf { it.isNotBlank() } ?: settings.apiKey
+            }
+
+            val effectiveBaseUrl: String = if (isGoogleAiStudio) {
+                com.edgehybrid.agent.data.local.SecureKeyStore.DEFAULT_GOOGLE_AI_STUDIO_ENDPOINT
+            } else {
+                keyStore?.getCustomEndpoint()?.takeIf { it.isNotBlank() } ?: settings.baseUrl
+            }
+
+            val effectiveUrl: String = "${effectiveBaseUrl.trimEnd('/')}/chat/completions"
+
             try {
                 httpClient.preparePost(effectiveUrl) {
                     contentType(ContentType.Application.Json)
                     accept(ContentType.Text.EventStream)
-                    // Every OpenAI-compatible endpoint, including Google's, authenticates
-                    // with an Authorization: Bearer header.
                     effectiveApiKey
                         ?.takeIf(String::isNotBlank)
                         ?.let { key ->
                             header(HttpHeaders.Authorization, "Bearer $key")
                         }
-                    setBody(request)
+                    setBody(currentRequest)
                 }.execute { response ->
                     val statusCode = response.status.value
 
@@ -170,6 +160,39 @@ class CloudInferenceEngine @Inject constructor(
                         throw RetryableProviderStatus(
                             statusCode = statusCode,
                             delayMs = maxOf(exponentialDelay, providerDelay)
+                        )
+                    }
+
+                    if (statusCode == 402) {
+                        val bodySnippet = runCatching {
+                            response.bodyAsText()
+                        }.getOrDefault("")
+                            .replace('\n', ' ')
+                            .take(512)
+
+                        android.util.Log.e("CloudInferenceEngine", "HTTP 402 (Payment Required): $bodySnippet")
+
+                        if (!hasFallenBackFrom402) {
+                            hasFallenBackFrom402 = true
+                            val geminiKey = keyStore?.getGeminiApiKey()?.trim().orEmpty()
+                            if (currentProvider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER && geminiKey.isNotBlank()) {
+                                android.util.Log.w("CloudInferenceEngine", "OpenRouter balance depleted (402). Auto-switching to configured Google AI Studio with free gemini-2.5-flash")
+                                currentProvider = com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO
+                                keyStore?.setPreferredProvider(currentProvider)
+                                keyStore?.setSelectedCloudModel("gemini-2.5-flash")
+                                currentRequest = currentRequest.copy(model = "gemini-2.5-flash")
+                                throw RetryableProviderStatus(statusCode = 402, delayMs = 100L)
+                            } else if (!currentRequest.model.endsWith(":free")) {
+                                android.util.Log.w("CloudInferenceEngine", "OpenRouter balance depleted (402). Auto-switching to free model $FREE_FALLBACK_MODEL")
+                                keyStore?.setSelectedCloudModel(FREE_FALLBACK_MODEL)
+                                currentRequest = currentRequest.copy(model = FREE_FALLBACK_MODEL)
+                                throw RetryableProviderStatus(statusCode = 402, delayMs = 100L)
+                            }
+                        }
+
+                        throw ProviderHttpException(
+                            statusCode = 402,
+                            responseSnippet = "OpenRouter balance is $0.00 (HTTP 402 Payment Required). Please select a free model (e.g. google/gemini-2.0-flash-exp:free) or top up credits at openrouter.ai/credits."
                         )
                     }
 
@@ -206,6 +229,11 @@ class CloudInferenceEngine @Inject constructor(
                 }
                 return
             } catch (retryable: RetryableProviderStatus) {
+                if (retryable.statusCode == 402) {
+                    retryCount = 0
+                    continue
+                }
+
                 if (retryCount >= policy.providerMaxRetries) {
                     throw ProviderHttpException(
                         statusCode = retryable.statusCode,
@@ -213,26 +241,14 @@ class CloudInferenceEngine @Inject constructor(
                     )
                 }
 
-                // On 429: try the next OpenRouter key before giving up.
-                // This is the only way to recover from a per-key daily limit.
-                // On 429: rotate to the next OpenRouter key before spending the retry
-                // budget. This is the only recovery from a per-key daily limit.
-                //
-                // The sentinel is -1 (non-null Int) for "pool spent", so the check must
-                // be `>= 0`. A `!= null` test is always true for a live store and
-                // would wrap onto a negative index, re-read a blank key, and loop.
                 if (retryable.statusCode == 429) {
                     val next = keyStore?.getNextOpenRouterKeyIndex(currentKeyIndex) ?: -1
                     if (next >= 0) {
                         currentKeyIndex = next
-                        // A fresh key gets the full retry budget, not the remainder.
                         retryCount = 0
                         continue
                     }
                 }
-                // No spare key: fall through to the normal backoff. A 429 with a single
-                // key may still clear within the retry window, and 503 always needs the
-                // backoff regardless of key state.
 
                 suspendDelay.wait(retryable.delayMs)
                 retryCount += 1
@@ -339,6 +355,10 @@ class CloudInferenceEngine @Inject constructor(
         accumulator.accept(chunk)
         emitNewContent(previousLength, accumulator, onDelta)
         return false
+    }
+
+    companion object {
+        const val FREE_FALLBACK_MODEL = "google/gemini-2.0-flash-exp:free"
     }
 }
 

@@ -50,6 +50,11 @@ class ToolConfirmationPolicy @Inject constructor() {
             "plan_transit_journey",
             "list_custom_tools",
             "list_mcp_servers",
+            "read_clipboard",
+            "copy_to_clipboard",
+            "read_device_file",
+            "list_device_files",
+            "vibrate_device",
             // System queries: read device state only, no side effect, no permission needed.
             "get_battery_status",
             "get_storage_status",
