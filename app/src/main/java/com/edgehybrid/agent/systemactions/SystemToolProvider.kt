@@ -493,7 +493,8 @@ class SystemToolProvider(
                 parameters = buildJsonObject {
                     put("type", "object")
                     put("properties", buildJsonObject {})
-                    put("required", buildJsonObject {})
+                    put("required", buildJsonArray {})
+                    put("additionalProperties", false)
                 }
             )
         )

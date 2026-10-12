@@ -444,7 +444,7 @@ class CloudInferenceEngine @Inject constructor(
     }
 
     companion object {
-        const val FREE_FALLBACK_MODEL = "google/gemini-2.0-flash-exp:free"
+        const val FREE_FALLBACK_MODEL = "google/gemma-4-31b-it:free"
     }
 }
 
