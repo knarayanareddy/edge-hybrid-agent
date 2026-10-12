@@ -288,6 +288,9 @@ fun ChatScreen(
                     onLaunchCamera = {
                         onSend("Please open the camera viewfinder", null)
                     },
+                    onSendPrompt = { prompt ->
+                        onSend(prompt, null)
+                    },
                     modifier = Modifier.weight(1f)
                 )
             } else {

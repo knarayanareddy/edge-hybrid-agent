@@ -178,6 +178,17 @@ class CloudInferenceEngine @Inject constructor(
                     val statusCode = response.status.value
 
                     if (statusCode == 429 || statusCode == 503) {
+                        if (currentProvider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO && !hasFallenBackFrom402) {
+                            hasFallenBackFrom402 = true
+                            android.util.Log.w(
+                                "CloudInferenceEngine",
+                                "Google AI Studio returned HTTP $statusCode. Auto-falling back to OpenRouter free models ($FREE_FALLBACK_MODEL) with 6-key routing"
+                            )
+                            currentProvider = com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_OPENROUTER
+                            currentKeyIndex = 0
+                            currentRequest = currentRequest.copy(model = FREE_FALLBACK_MODEL)
+                            throw RetryableProviderStatus(statusCode = statusCode, delayMs = 50L)
+                        }
                         val exponentialDelay = policy.backoffFor(retryCount)
                         val providerDelay = response.retryAfterMillis() ?: 0L
                         throw RetryableProviderStatus(
@@ -299,7 +310,7 @@ class CloudInferenceEngine @Inject constructor(
                 }
                 return
             } catch (retryable: RetryableProviderStatus) {
-                if (retryable.statusCode == 402 || retryable.statusCode == 401) {
+                if (retryable.statusCode == 402 || retryable.statusCode == 401 || (hasFallenBackFrom402 && retryCount == 0)) {
                     retryCount = 0
                     continue
                 }

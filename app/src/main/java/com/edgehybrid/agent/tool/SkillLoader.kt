@@ -950,7 +950,7 @@ class BuiltInSkillLoader @Inject constructor(
             )
         }
 
-        return baseTools + systemToolProvider.toolDefinitions() + dynamicToolDefs
+        return (baseTools + systemToolProvider.toolDefinitions() + dynamicToolDefs).distinctBy { it.function.name }
     }
 
     override suspend fun execute(call: ModelToolCall): ToolExecutionOutcome =

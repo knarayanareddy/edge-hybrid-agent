@@ -108,7 +108,11 @@ class UserSkillStore @Inject constructor(
                 )
             }
 
-            _skills.value = loaded.sortedBy { it.name.lowercase() }
+            val byId = LinkedHashMap<String, UserSkill>()
+            loaded.forEach { skill ->
+                byId[skill.id] = skill
+            }
+            _skills.value = byId.values.sortedBy { it.name.lowercase() }
             _skills.value
         }
     }

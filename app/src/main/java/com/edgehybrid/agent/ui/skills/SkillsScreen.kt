@@ -181,7 +181,7 @@ fun SkillsScreen(
                 }
             }
 
-            items(userSkills, key = { it.id }) { skill ->
+            items(userSkills.distinctBy { it.id }, key = { "skill_${it.id}" }) { skill ->
                 UserSkillRow(
                     skill = skill,
                     onToggle = { enabled ->
@@ -224,7 +224,7 @@ fun SkillsScreen(
                 )
             }
 
-            items(tools, key = { it.function.name }) { tool ->
+            items(tools.distinctBy { it.function.name }, key = { "tool_${it.function.name}" }) { tool ->
                 ToolRow(tool)
             }
 
@@ -261,7 +261,7 @@ fun SkillsScreen(
                 }
             }
 
-            items(servers, key = { it.id }) { server ->
+            items(servers.distinctBy { it.id }, key = { "server_${it.id}" }) { server ->
                 McpServerRow(server)
             }
         }
