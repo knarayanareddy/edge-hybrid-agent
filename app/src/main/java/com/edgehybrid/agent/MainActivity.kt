@@ -57,6 +57,15 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var mcpRegistry: McpServerRegistry
 
+    @Inject
+    lateinit var taskStore: com.edgehybrid.agent.scheduled.ScheduledTaskStore
+
+    @Inject
+    lateinit var libraryStore: com.edgehybrid.agent.library.LibraryStore
+
+    @Inject
+    lateinit var userMemoryDao: com.edgehybrid.agent.memory.UserMemoryDao
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -67,7 +76,10 @@ class MainActivity : ComponentActivity() {
                     lessonsDao = lessonsDao,
                     skillLoader = skillLoader,
                     mcpRegistry = mcpRegistry,
-                    userSkillStore = userSkillStore
+                    userSkillStore = userSkillStore,
+                    taskStore = taskStore,
+                    libraryStore = libraryStore,
+                    userMemoryDao = userMemoryDao
                 )
             }
         }
@@ -75,10 +87,13 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Tab indices */
-private const val TAB_CHAT     = 0
-private const val TAB_SKILLS   = 1
-private const val TAB_TOOLS    = 2
-private const val TAB_SETTINGS = 3
+private const val TAB_CHAT      = 0
+private const val TAB_SKILLS    = 1
+private const val TAB_TOOLS     = 2
+private const val TAB_SETTINGS  = 3
+private const val TAB_SCHEDULED = 4
+private const val TAB_LIBRARY   = 5
+private const val TAB_MEMORY    = 6
 
 @Composable
 fun MainAppScreen(
@@ -86,7 +101,10 @@ fun MainAppScreen(
     lessonsDao: LessonsDao,
     skillLoader: SkillLoader,
     mcpRegistry: McpServerRegistry,
-    userSkillStore: com.edgehybrid.agent.skills.UserSkillStore
+    userSkillStore: com.edgehybrid.agent.skills.UserSkillStore,
+    taskStore: com.edgehybrid.agent.scheduled.ScheduledTaskStore,
+    libraryStore: com.edgehybrid.agent.library.LibraryStore,
+    userMemoryDao: com.edgehybrid.agent.memory.UserMemoryDao
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(TAB_CHAT) }
 
@@ -96,11 +114,14 @@ fun MainAppScreen(
     val chatState by chatViewModel.uiState.collectAsStateWithLifecycle()
 
     val tabTitle = when (selectedTab) {
-        TAB_CHAT     -> "Chat"
-        TAB_SKILLS   -> "Skills & Tools"
-        TAB_TOOLS    -> "Device Tools"
-        TAB_SETTINGS -> "Settings"
-        else         -> "Chat"
+        TAB_CHAT      -> "Chat"
+        TAB_SKILLS    -> "Skills & Tools"
+        TAB_TOOLS     -> "Device Tools"
+        TAB_SETTINGS  -> "Settings"
+        TAB_SCHEDULED -> "Scheduled"
+        TAB_LIBRARY   -> "Library"
+        TAB_MEMORY    -> "Memory & Personalization"
+        else          -> "Chat"
     }
 
     Scaffold(
@@ -140,10 +161,12 @@ fun MainAppScreen(
             )
         },
         bottomBar = {
-            AuraBottomNavigationBar(
-                selectedTab = selectedTab,
-                onTabSelected = { selectedTab = it }
-            )
+            if (selectedTab in 0..3) {
+                AuraBottomNavigationBar(
+                    selectedTab = selectedTab,
+                    onTabSelected = { selectedTab = it }
+                )
+            }
         },
         containerColor = AuraTokens.SurfaceLight
     ) { innerPadding ->
@@ -155,7 +178,10 @@ fun MainAppScreen(
             when (selectedTab) {
                 TAB_CHAT -> ChatRoute(
                     viewModel = chatViewModel,
-                    onOpenSettings = { selectedTab = TAB_SETTINGS }
+                    onOpenSettings = { selectedTab = TAB_SETTINGS },
+                    onOpenScheduled = { selectedTab = TAB_SCHEDULED },
+                    onOpenLibrary = { selectedTab = TAB_LIBRARY },
+                    onOpenMemory = { selectedTab = TAB_MEMORY }
                 )
 
                 TAB_SKILLS -> SkillsScreen(
@@ -170,6 +196,21 @@ fun MainAppScreen(
                 TAB_SETTINGS -> SettingsScreen(
                     keyStore = keyStore,
                     lessonsDao = lessonsDao,
+                    onNavigateBack = { selectedTab = TAB_CHAT }
+                )
+
+                TAB_SCHEDULED -> com.edgehybrid.agent.ui.scheduled.ScheduledTasksScreen(
+                    taskStore = taskStore,
+                    onNavigateBack = { selectedTab = TAB_CHAT }
+                )
+
+                TAB_LIBRARY -> com.edgehybrid.agent.ui.library.LibraryScreen(
+                    libraryStore = libraryStore,
+                    onNavigateBack = { selectedTab = TAB_CHAT }
+                )
+
+                TAB_MEMORY -> com.edgehybrid.agent.ui.memory.MemoryManagerScreen(
+                    userMemoryDao = userMemoryDao,
                     onNavigateBack = { selectedTab = TAB_CHAT }
                 )
             }

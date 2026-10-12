@@ -44,7 +44,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -106,7 +109,10 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ChatRoute(
     viewModel: ChatViewModel = hiltViewModel(),
-    onOpenSettings: () -> Unit = {}
+    onOpenSettings: () -> Unit = {},
+    onOpenScheduled: () -> Unit = {},
+    onOpenLibrary: () -> Unit = {},
+    onOpenMemory: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     ChatScreen(
@@ -122,7 +128,10 @@ fun ChatRoute(
         onTranscribeAudio = viewModel::transcribeMeetingAudio,
         onConfirmAction = viewModel::confirmPendingAction,
         onDeclineAction = viewModel::declinePendingAction,
-        onOpenSettings = onOpenSettings
+        onOpenSettings = onOpenSettings,
+        onOpenScheduled = onOpenScheduled,
+        onOpenLibrary = onOpenLibrary,
+        onOpenMemory = onOpenMemory
     )
 }
 
@@ -141,7 +150,10 @@ fun ChatScreen(
     onTranscribeAudio: (ByteArray, String, (String) -> Unit, (String) -> Unit) -> Unit = { _, _, _, _ -> },
     onConfirmAction: () -> Unit = {},
     onDeclineAction: () -> Unit = {},
-    onOpenSettings: () -> Unit = {}
+    onOpenSettings: () -> Unit = {},
+    onOpenScheduled: () -> Unit = {},
+    onOpenLibrary: () -> Unit = {},
+    onOpenMemory: () -> Unit = {}
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     var attachedBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -411,7 +423,61 @@ fun ChatScreen(
                             Text("New Chat")
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            onClick = { onToggleDrawer(false); onOpenScheduled() },
+                            shape = RoundedCornerShape(100.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Scheduled", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        Surface(
+                            onClick = { onToggleDrawer(false); onOpenLibrary() },
+                            shape = RoundedCornerShape(100.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Library", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        Surface(
+                            onClick = { onToggleDrawer(false); onOpenMemory() },
+                            shape = RoundedCornerShape(100.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Memory", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()

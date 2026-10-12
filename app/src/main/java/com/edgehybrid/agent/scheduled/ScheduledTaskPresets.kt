@@ -1,0 +1,290 @@
+package com.edgehybrid.agent.scheduled
+
+/**
+ * Built-in catalog of 22 Scheduled Task recipes matching the official ChatGPT mobile app.
+ *
+ * Each task defines autonomous execution instructions, default recurrence schedules,
+ * and semantic emojis.
+ */
+object ScheduledTaskPresets {
+
+    val allPresets: List<ScheduledTask> = listOf(
+        ScheduledTask(
+            id = "preset_find_job",
+            title = "Find a job",
+            description = "Send me new job matches every Monday and Thursday.",
+            prompt = "Search for new remote and local software engineering and AI tech jobs matching my profile. Filter for high match scores, summarize compensation, responsibilities, and application links.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(1, 4),
+            hour = 9,
+            minute = 0,
+            category = "CAREER",
+            iconEmoji = "💼",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_industry_news",
+            title = "Track industry news",
+            description = "Explain what's changing in my industry every week.",
+            prompt = "Synthesize key breaking news, major product releases, acquisitions, and breakthroughs in AI, mobile computing, and agentic systems from the past week into an executive briefing.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(1),
+            hour = 8,
+            minute = 30,
+            category = "NEWS",
+            iconEmoji = "📰",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_weather_plan",
+            title = "Plan around weather",
+            description = "Show me a three-day forecast each morning.",
+            prompt = "Check the local 3-day weather forecast. Highlight precipitation risk, temperature swings, UV index, and suggest practical gear or schedule adjustments.",
+            recurrence = ScheduleRecurrence.DAILY,
+            hour = 7,
+            minute = 0,
+            category = "LIFESTYLE",
+            iconEmoji = "⛅",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_find_research",
+            title = "Find new research",
+            description = "Send me new research on topics I care about every Friday.",
+            prompt = "Search arXiv and top conferences for new preprint papers on edge LLM quantization, agentic harnesses, and on-device RAG. Summarize core contributions and benchmark metrics.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(5),
+            hour = 10,
+            minute = 0,
+            category = "RESEARCH",
+            iconEmoji = "📚",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_follow_topic",
+            title = "Follow a topic",
+            description = "Alert me to big changes in a subject I care about.",
+            prompt = "Monitor key developments on local AI model deployment and Snapdragon NPU acceleration. Alert me if significant architectural updates or benchmarks were published.",
+            recurrence = ScheduleRecurrence.DAILY,
+            hour = 12,
+            minute = 0,
+            category = "NEWS",
+            iconEmoji = "📰",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_outfit_ideas",
+            title = "Outfit ideas",
+            description = "Pick an outfit from my clothes for each day's weather.",
+            prompt = "Based on today's weather forecast and my schedule, recommend an optimal, stylish, and comfortable outfit combination.",
+            recurrence = ScheduleRecurrence.DAILY,
+            hour = 7,
+            minute = 30,
+            category = "LIFESTYLE",
+            iconEmoji = "👗",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_compare_products",
+            title = "Compare products",
+            description = "Check my product shortlist weekly and flag key changes.",
+            prompt = "Check prices, stock levels, and user review shifts for items on my hardware and gadget wishlist. Flag any notable price drops or stock alerts.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(7),
+            hour = 18,
+            minute = 0,
+            category = "SHOPPING",
+            iconEmoji = "⚖️",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_company_news",
+            title = "Track company news",
+            description = "Check daily and flag key news about my company.",
+            prompt = "Scan news wires, press releases, and industry publications for mentions of my company and key partners. Flag brand sentiment and major announcements.",
+            recurrence = ScheduleRecurrence.DAILY,
+            hour = 8,
+            minute = 30,
+            category = "BUSINESS",
+            iconEmoji = "🏢",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_what_to_watch",
+            title = "What to watch",
+            description = "Pick three movies or shows for me every Friday night.",
+            prompt = "Recommend 3 top-tier movies or streaming series episodes matching my preferences in sci-fi, tech documentaries, and psychological thrillers with Rotten Tomatoes and IMDb ratings.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(5),
+            hour = 18,
+            minute = 0,
+            category = "ENTERTAINMENT",
+            iconEmoji = "🎬",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_price_alerts",
+            title = "Price alerts",
+            description = "Check prices daily and alert me when my item costs less.",
+            prompt = "Monitor major online retailers for price reductions on tracked tech items. Alert immediately if prices drop below historical thresholds.",
+            recurrence = ScheduleRecurrence.DAILY,
+            hour = 11,
+            minute = 0,
+            category = "SHOPPING",
+            iconEmoji = "🛍️",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_track_competitors",
+            title = "Track my competitors",
+            description = "Alert me to key launches and changes.",
+            prompt = "Review public changelogs, social feeds, and app store updates for top competing agent platforms. Highlight features shipped, marketing pivots, and API changes.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(1, 4),
+            hour = 9,
+            minute = 30,
+            category = "BUSINESS",
+            iconEmoji = "💼",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_find_concerts",
+            title = "Find concerts",
+            description = "Check weekly for new concerts that match my taste.",
+            prompt = "Check upcoming live music, indie concerts, and festival listings in my city. Highlight artists matching my musical taste and include venue & ticket dates.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(4),
+            hour = 17,
+            minute = 0,
+            category = "ENTERTAINMENT",
+            iconEmoji = "🎵",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_weekend_reads",
+            title = "Find weekend reads",
+            description = "Send me a great article to read every Saturday.",
+            prompt = "Select 1 deeply engaging, long-form essay or technical retrospective on computing history, engineering philosophy, or cognitive science for weekend reading.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(6),
+            hour = 9,
+            minute = 0,
+            category = "READING",
+            iconEmoji = "📖",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_find_discounts",
+            title = "Find discounts",
+            description = "Find me coupons from my favorite stores each week.",
+            prompt = "Search for verified coupons, promo codes, and flash sale discounts across my preferred tech and apparel storefronts.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(3),
+            hour = 10,
+            minute = 0,
+            category = "SHOPPING",
+            iconEmoji = "🛍️",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_organize_home",
+            title = "Organize my home",
+            description = "Suggest one 15-minute home task for me each Saturday.",
+            prompt = "Suggest a single, manageable 15-minute decluttering or home maintenance task for Saturday morning that creates high aesthetic and functional impact.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(6),
+            hour = 10,
+            minute = 30,
+            category = "HOME",
+            iconEmoji = "🏠",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_birthday_gifts",
+            title = "Plan birthday gifts",
+            description = "Help me plan gifts and celebrations weeks ahead.",
+            prompt = "Check upcoming calendar birthdays for family and friends within the next 3 weeks. Suggest thoughtful, personalized gift ideas and ordering timelines.",
+            recurrence = ScheduleRecurrence.MONTHLY,
+            hour = 10,
+            minute = 0,
+            category = "PERSONAL",
+            iconEmoji = "📅",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_recommend_book",
+            title = "Recommend a book",
+            description = "Pick three books for me each month, based on my tastes.",
+            prompt = "Recommend 3 exceptional books (1 technical, 1 fiction, 1 biography) based on my interests, including concise summaries and why they are worth reading.",
+            recurrence = ScheduleRecurrence.MONTHLY,
+            hour = 12,
+            minute = 0,
+            category = "READING",
+            iconEmoji = "📚",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_create_budget",
+            title = "Create a budget",
+            description = "Send me a fresh, blank budget template each month.",
+            prompt = "Generate a clean, structured monthly budget breakdown with savings targets, fixed expenses, discretionary allowance, and investment allocations.",
+            recurrence = ScheduleRecurrence.MONTHLY,
+            hour = 8,
+            minute = 0,
+            category = "FINANCE",
+            iconEmoji = "💰",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_plan_workouts",
+            title = "Plan workouts",
+            description = "Plan my week's workouts around my goals and schedule.",
+            prompt = "Generate a balanced 5-day workout regimen (strength, hypertrophy, cardio, mobility) designed around my weekly schedule and recovery requirements.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(7),
+            hour = 20,
+            minute = 0,
+            category = "FITNESS",
+            iconEmoji = "🏃",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_learn_language",
+            title = "Learn a language",
+            description = "Send me a daily lesson at my level, under 10 minutes.",
+            prompt = "Deliver a focused, high-yield 10-minute language lesson with 5 practical conversational phrases, 1 grammar nuance, and a short interactive dialogue practice.",
+            recurrence = ScheduleRecurrence.DAILY,
+            hour = 8,
+            minute = 0,
+            category = "EDUCATION",
+            iconEmoji = "🗣️",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_plan_weekend",
+            title = "Plan my weekend",
+            description = "Send me local weekend ideas every Thursday.",
+            prompt = "Curate 3 delightful local weekend activity ideas (outdoor adventure, culture/art exhibit, culinary experience) tailored to the upcoming weekend's forecast.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(4),
+            hour = 16,
+            minute = 0,
+            category = "LIFESTYLE",
+            iconEmoji = "📍",
+            isPreset = true
+        ),
+        ScheduledTask(
+            id = "preset_weeknight_dinners",
+            title = "Plan weeknight dinners",
+            description = "Plan five dinners and my grocery list each week.",
+            prompt = "Design a 5-day dinner meal plan (quick, nutritious, minimal cleanup) accompanied by a categorized grocery shopping checklist with exact ingredients.",
+            recurrence = ScheduleRecurrence.WEEKLY,
+            daysOfWeek = listOf(7),
+            hour = 16,
+            minute = 0,
+            category = "LIFESTYLE",
+            iconEmoji = "🍽️",
+            isPreset = true
+        )
+    )
+}
