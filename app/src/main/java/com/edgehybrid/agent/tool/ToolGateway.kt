@@ -55,8 +55,21 @@ class ToolGateway @Inject constructor(
     private val skillLoader: SkillLoader,
     private val mcpRouter: McpMultiServerRouter,
     private val mcpClient: McpClient,
-    private val jevClient: JevEvaluator
+    private val jevClient: JevEvaluator,
+    private val pluginRegistry: com.edgehybrid.agent.plugins.PluginRegistry
 ) {
+    constructor(
+        skillLoader: SkillLoader,
+        mcpRouter: McpMultiServerRouter,
+        mcpClient: McpClient,
+        jevClient: JevEvaluator
+    ) : this(
+        skillLoader,
+        mcpRouter,
+        mcpClient,
+        jevClient,
+        com.edgehybrid.agent.plugins.PluginRegistry(io.ktor.client.HttpClient())
+    )
     /**
      * Narrows the tool payload for [prompt] using Jev's `choice` primitive.
      *
@@ -96,6 +109,7 @@ class ToolGateway @Inject constructor(
     }
     suspend fun loadCatalog(): ToolCatalog {
         val localDefinitions = skillLoader.listTools()
+        val pluginDefinitions = pluginRegistry?.allToolDefinitions().orEmpty()
 
         // Ask the router which enabled servers advertise what, so execution can be routed
         // to the same server that advertised the tool rather than re-probing on every call.
@@ -138,6 +152,7 @@ class ToolGateway @Inject constructor(
         val definitions = buildList {
             // Local tools win a name collision: they are first-party and always available.
             addAll(localDefinitions)
+            addAll(pluginDefinitions)
             addAll(remoteDefinitions)
         }.filter { definition ->
             definition.function.name.isNotBlank() &&
@@ -145,12 +160,14 @@ class ToolGateway @Inject constructor(
         }
 
         val localNames = localDefinitions.mapTo(mutableSetOf()) { it.function.name }
+        val pluginNames = pluginDefinitions.mapTo(mutableSetOf()) { it.function.name }
 
         return ToolCatalog(
             definitions = definitions,
-            localToolNames = localNames,
+            localToolNames = localNames + pluginNames,
             remoteToolNames = remoteDefinitions.mapTo(mutableSetOf()) { it.function.name }
-                .minus(localNames),
+                .minus(localNames)
+                .minus(pluginNames),
             remoteToolOwners = owners
         )
     }
@@ -160,11 +177,15 @@ class ToolGateway @Inject constructor(
         catalog: ToolCatalog
     ): ToolExecutionOutcome =
         try {
-            when (call.function.name) {
-                in catalog.localToolNames ->
+            when {
+                call.function.name in (pluginRegistry?.toolNames().orEmpty()) ->
+                    pluginRegistry?.executeTool(call.function.name, call.function.arguments)
+                        ?: ToolExecutionOutcome(errorContent("Plugin execution failed"), true)
+
+                call.function.name in catalog.localToolNames ->
                     skillLoader.execute(call)
 
-                in catalog.remoteToolNames -> {
+                call.function.name in catalog.remoteToolNames -> {
                     // Prefer the server that advertised this tool. The router re-checks
                     // that the server is still enabled before dispatching.
                     val owner = catalog.remoteToolOwners[call.function.name]

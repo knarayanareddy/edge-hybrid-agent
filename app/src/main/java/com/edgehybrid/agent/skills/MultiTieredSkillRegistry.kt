@@ -41,7 +41,7 @@ class MultiTieredSkillRegistry(
         WEB_RESEARCH("Web & Deep Research", "Live web search, Wikipedia, and webpage extraction"),
         PRODUCTIVITY("Personal Productivity", "Calendar events, quick notes, timers, alarms, and messaging"),
         SANDBOX_CODE("Sandbox & Compute", "Isolated JavaScript execution, math, and unit conversion"),
-        EXTERNAL_MCP("External MCP Servers", "Remote Model Context Protocol tools and integrations"),
+        EXTERNAL_MCP("External MCP & Plugins", "Remote Model Context Protocol tools and ChatGPT OpenAPI plugins"),
         USER_PLAYBOOK("Procedural Playbooks", "User-authored multi-step workflow playbooks and procedures")
     }
 
@@ -127,7 +127,8 @@ class MultiTieredSkillRegistry(
             activeDomains.add(SkillDomain.PRODUCTIVITY)
         }
 
-        if (q.contains("mcp") || q.contains("server") || q.contains("github") || q.contains("slack")) {
+        if (q.contains("mcp") || q.contains("server") || q.contains("github") || q.contains("slack") ||
+            q.contains("plugin") || q.contains("api") || q.contains("action")) {
             activeDomains.add(SkillDomain.EXTERNAL_MCP)
         }
 

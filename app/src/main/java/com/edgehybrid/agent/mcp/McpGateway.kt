@@ -131,4 +131,88 @@ class McpGateway @Inject constructor(
             client.close()
         }
     }
+
+    suspend fun listResources(serverId: String): Result<List<McpResource>> = withContext(Dispatchers.IO) {
+        val server = servers[serverId]
+            ?: return@withContext Result.failure(IllegalArgumentException("Server '$serverId' not registered"))
+
+        val client = transportFactory.createClient(server)
+        try {
+            val request = JsonRpcRequest(
+                id = UUID.randomUUID().toString(),
+                method = "resources/list",
+                params = buildJsonObject {}
+            )
+            val response: HttpResponse = client.post(server.baseUrl) { setBody(request) }
+            if (response.status.value in 200..299) {
+                val rpcResponse = response.body<JsonRpcResponse>()
+                val resElement = (rpcResponse.result as? JsonObject)?.get("resources")
+                val resources = if (resElement != null) {
+                    json.decodeFromJsonElement<List<McpResource>>(resElement)
+                } else emptyList()
+                Result.success(resources)
+            } else {
+                Result.failure(IllegalStateException("HTTP ${response.status.value}"))
+            }
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            Result.failure(e)
+        } finally {
+            client.close()
+        }
+    }
+
+    suspend fun listPrompts(serverId: String): Result<List<McpPrompt>> = withContext(Dispatchers.IO) {
+        val server = servers[serverId]
+            ?: return@withContext Result.failure(IllegalArgumentException("Server '$serverId' not registered"))
+
+        val client = transportFactory.createClient(server)
+        try {
+            val request = JsonRpcRequest(
+                id = UUID.randomUUID().toString(),
+                method = "prompts/list",
+                params = buildJsonObject {}
+            )
+            val response: HttpResponse = client.post(server.baseUrl) { setBody(request) }
+            if (response.status.value in 200..299) {
+                val rpcResponse = response.body<JsonRpcResponse>()
+                val promptElement = (rpcResponse.result as? JsonObject)?.get("prompts")
+                val prompts = if (promptElement != null) {
+                    json.decodeFromJsonElement<List<McpPrompt>>(promptElement)
+                } else emptyList()
+                Result.success(prompts)
+            } else {
+                Result.failure(IllegalStateException("HTTP ${response.status.value}"))
+            }
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            Result.failure(e)
+        } finally {
+            client.close()
+        }
+    }
+
+    suspend fun ping(serverId: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        val server = servers[serverId]
+            ?: return@withContext Result.failure(IllegalArgumentException("Server '$serverId' not registered"))
+
+        val client = transportFactory.createClient(server)
+        try {
+            val request = JsonRpcRequest(
+                id = UUID.randomUUID().toString(),
+                method = "ping",
+                params = buildJsonObject {}
+            )
+            val response: HttpResponse = client.post(server.baseUrl) { setBody(request) }
+            Result.success(response.status.value in 200..299)
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            Result.failure(e)
+        } finally {
+            client.close()
+        }
+    }
 }

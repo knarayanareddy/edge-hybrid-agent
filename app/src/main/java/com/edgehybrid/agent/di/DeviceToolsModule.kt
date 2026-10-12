@@ -82,4 +82,19 @@ object DeviceToolsModule {
         registry: McpServerRegistry
     ): com.edgehybrid.agent.mcp.McpOAuthManager =
         com.edgehybrid.agent.mcp.McpOAuthManager(context, keyStore, registry)
+
+    @Provides
+    @Singleton
+    fun providePluginPermissionStore(
+        @ApplicationContext context: Context
+    ): com.edgehybrid.agent.plugins.PluginPermissionStore =
+        com.edgehybrid.agent.plugins.PluginPermissionStore(context)
+
+    @Provides
+    @Singleton
+    fun providePluginRegistry(
+        httpClient: io.ktor.client.HttpClient,
+        keyStore: com.edgehybrid.agent.data.local.SecureKeyStore
+    ): com.edgehybrid.agent.plugins.PluginRegistry =
+        com.edgehybrid.agent.plugins.PluginRegistry(httpClient, keyStore)
 }

@@ -36,8 +36,23 @@ class ConfirmationGate @Inject constructor(
     private val registry: ActionConfirmationRegistry,
     private val skillLoader: SkillLoader,
     private val toolGateway: ToolGateway,
-    private val jevSafetyGate: com.edgehybrid.agent.jev.JevSafetyGate
+    private val jevSafetyGate: com.edgehybrid.agent.jev.JevSafetyGate,
+    private val permissionStore: com.edgehybrid.agent.plugins.PluginPermissionStore
 ) {
+    constructor(
+        policy: ToolConfirmationPolicy,
+        registry: ActionConfirmationRegistry,
+        skillLoader: SkillLoader,
+        toolGateway: ToolGateway,
+        jevSafetyGate: com.edgehybrid.agent.jev.JevSafetyGate
+    ) : this(
+        policy,
+        registry,
+        skillLoader,
+        toolGateway,
+        jevSafetyGate,
+        com.edgehybrid.agent.plugins.PluginPermissionStore()
+    )
 
     /**
      * Outcome of gating a single tool call.
@@ -69,7 +84,15 @@ class ConfirmationGate @Inject constructor(
      */
     fun gate(call: ModelToolCall, isRemote: Boolean = false): GateResult {
         val toolName = call.function.name
-        val tier = if (isRemote) ActionRiskTier.CONFIRM else policy.tierFor(toolName)
+        val remoteAutoApproved = isRemote && (
+            permissionStore.isAutoApproved(toolName) ||
+            permissionStore.isAutoApproved(toolName.substringBefore('_'))
+        )
+        val tier = when {
+            remoteAutoApproved -> ActionRiskTier.AUTO_APPROVE
+            isRemote -> ActionRiskTier.CONFIRM
+            else -> policy.tierFor(toolName)
+        }
 
         val execute: suspend () -> String = if (isRemote) {
             { toolGateway.execute(call, toolGateway.loadCatalog()).content }
