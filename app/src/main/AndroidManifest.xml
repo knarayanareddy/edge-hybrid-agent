@@ -101,7 +101,31 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Info Box System Integration.
+            Appears in the floating text selection toolbar ("Add to Info Box") and
+            the system share sheet for hyperlinks and snippets across the entire phone.
+        -->
+        <activity
+            android:name=".infobox.AddToInfoBoxActivity"
+            android:exported="true"
+            android:label="Add to Info Box"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <!-- Android OS Computer Use Accessibility Service (@oai/sky equivalent) -->
+
         <service
             android:name=".hardware.accessibility.EdgeAccessibilityService"
             android:exported="true"

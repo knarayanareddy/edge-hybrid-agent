@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Schedule
@@ -112,7 +113,8 @@ fun ChatRoute(
     onOpenSettings: () -> Unit = {},
     onOpenScheduled: () -> Unit = {},
     onOpenLibrary: () -> Unit = {},
-    onOpenMemory: () -> Unit = {}
+    onOpenMemory: () -> Unit = {},
+    onOpenInfoBox: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     ChatScreen(
@@ -131,7 +133,8 @@ fun ChatRoute(
         onOpenSettings = onOpenSettings,
         onOpenScheduled = onOpenScheduled,
         onOpenLibrary = onOpenLibrary,
-        onOpenMemory = onOpenMemory
+        onOpenMemory = onOpenMemory,
+        onOpenInfoBox = onOpenInfoBox
     )
 }
 
@@ -153,7 +156,8 @@ fun ChatScreen(
     onOpenSettings: () -> Unit = {},
     onOpenScheduled: () -> Unit = {},
     onOpenLibrary: () -> Unit = {},
-    onOpenMemory: () -> Unit = {}
+    onOpenMemory: () -> Unit = {},
+    onOpenInfoBox: () -> Unit = {}
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     var attachedBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -426,7 +430,7 @@ fun ChatScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Surface(
                             onClick = { onToggleDrawer(false); onOpenScheduled() },
@@ -435,12 +439,12 @@ fun ChatScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center
                             ) {
-                                Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text("Scheduled", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
@@ -451,15 +455,21 @@ fun ChatScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center
                             ) {
-                                Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text("Library", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Surface(
                             onClick = { onToggleDrawer(false); onOpenMemory() },
                             shape = RoundedCornerShape(100.dp),
@@ -467,13 +477,29 @@ fun ChatScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center
                             ) {
-                                Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(15.dp), tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text("Memory", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        Surface(
+                            onClick = { onToggleDrawer(false); onOpenInfoBox() },
+                            shape = RoundedCornerShape(100.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Default.Inbox, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("Info Box", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }

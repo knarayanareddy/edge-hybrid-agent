@@ -10,7 +10,21 @@ object ScheduledTaskPresets {
 
     val allPresets: List<ScheduledTask> = listOf(
         ScheduledTask(
+            id = "preset_infobox_overview",
+            title = "Info Box Daily Overview",
+            description = "Synthesize and briefing of all hyperlinks and text snippets added to Info Box from the previous day.",
+            prompt = "Review all articles, hyperlinks, and text snippets captured in the Info Box from yesterday. Categorize by topic, summarize key insights, and suggest practical takeaways or follow-up actions.",
+            recurrence = ScheduleRecurrence.DAILY,
+            hour = 8,
+            minute = 30,
+            category = "KNOWLEDGE",
+            iconEmoji = "📥",
+            isEnabled = false,
+            isPreset = true
+        ),
+        ScheduledTask(
             id = "preset_find_job",
+
             title = "Find a job",
             description = "Send me new job matches every Monday and Thursday.",
             prompt = "Search for new remote and local software engineering and AI tech jobs matching my profile. Filter for high match scores, summarize compensation, responsibilities, and application links.",

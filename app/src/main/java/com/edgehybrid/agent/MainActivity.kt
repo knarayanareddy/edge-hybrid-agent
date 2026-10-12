@@ -66,6 +66,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var userMemoryDao: com.edgehybrid.agent.memory.UserMemoryDao
 
+    @Inject
+    lateinit var infoBoxStore: com.edgehybrid.agent.infobox.InfoBoxStore
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -79,7 +82,8 @@ class MainActivity : ComponentActivity() {
                     userSkillStore = userSkillStore,
                     taskStore = taskStore,
                     libraryStore = libraryStore,
-                    userMemoryDao = userMemoryDao
+                    userMemoryDao = userMemoryDao,
+                    infoBoxStore = infoBoxStore
                 )
             }
         }
@@ -94,6 +98,7 @@ private const val TAB_SETTINGS  = 3
 private const val TAB_SCHEDULED = 4
 private const val TAB_LIBRARY   = 5
 private const val TAB_MEMORY    = 6
+private const val TAB_INFO_BOX  = 7
 
 @Composable
 fun MainAppScreen(
@@ -104,7 +109,8 @@ fun MainAppScreen(
     userSkillStore: com.edgehybrid.agent.skills.UserSkillStore,
     taskStore: com.edgehybrid.agent.scheduled.ScheduledTaskStore,
     libraryStore: com.edgehybrid.agent.library.LibraryStore,
-    userMemoryDao: com.edgehybrid.agent.memory.UserMemoryDao
+    userMemoryDao: com.edgehybrid.agent.memory.UserMemoryDao,
+    infoBoxStore: com.edgehybrid.agent.infobox.InfoBoxStore
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(TAB_CHAT) }
 
@@ -121,6 +127,7 @@ fun MainAppScreen(
         TAB_SCHEDULED -> "Scheduled"
         TAB_LIBRARY   -> "Library"
         TAB_MEMORY    -> "Memory & Personalization"
+        TAB_INFO_BOX  -> "Info Box"
         else          -> "Chat"
     }
 
@@ -181,7 +188,8 @@ fun MainAppScreen(
                     onOpenSettings = { selectedTab = TAB_SETTINGS },
                     onOpenScheduled = { selectedTab = TAB_SCHEDULED },
                     onOpenLibrary = { selectedTab = TAB_LIBRARY },
-                    onOpenMemory = { selectedTab = TAB_MEMORY }
+                    onOpenMemory = { selectedTab = TAB_MEMORY },
+                    onOpenInfoBox = { selectedTab = TAB_INFO_BOX }
                 )
 
                 TAB_SKILLS -> SkillsScreen(
@@ -212,6 +220,15 @@ fun MainAppScreen(
                 TAB_MEMORY -> com.edgehybrid.agent.ui.memory.MemoryManagerScreen(
                     userMemoryDao = userMemoryDao,
                     onNavigateBack = { selectedTab = TAB_CHAT }
+                )
+
+                TAB_INFO_BOX -> com.edgehybrid.agent.ui.infobox.InfoBoxScreen(
+                    infoBoxStore = infoBoxStore,
+                    onNavigateBack = { selectedTab = TAB_CHAT },
+                    onSendToChat = { prompt ->
+                        chatViewModel.send(prompt, null)
+                        selectedTab = TAB_CHAT
+                    }
                 )
             }
         }

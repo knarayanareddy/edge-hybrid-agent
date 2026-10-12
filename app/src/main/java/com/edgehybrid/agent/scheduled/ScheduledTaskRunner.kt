@@ -13,15 +13,17 @@ import javax.inject.Singleton
 class ScheduledTaskRunner(
     private val taskStore: ScheduledTaskStore,
     private val toolGateway: ToolGateway?,
-    private val inferenceEngine: InferenceEngine?
+    private val inferenceEngine: InferenceEngine?,
+    private val infoBoxStore: com.edgehybrid.agent.infobox.InfoBoxStore? = null
 ) {
     @Inject
     constructor(
         taskStore: ScheduledTaskStore,
-        toolGateway: ToolGateway
-    ) : this(taskStore, toolGateway, null)
+        toolGateway: ToolGateway,
+        infoBoxStore: com.edgehybrid.agent.infobox.InfoBoxStore
+    ) : this(taskStore, toolGateway, null, infoBoxStore)
 
-    constructor(taskStore: ScheduledTaskStore) : this(taskStore, null, null)
+    constructor(taskStore: ScheduledTaskStore) : this(taskStore, null, null, null)
 
     /**
      * Executes a scheduled task autonomously.
@@ -32,11 +34,19 @@ class ScheduledTaskRunner(
             ?: return@withContext "Error: Task with ID '$taskId' not found."
 
         val outcome = try {
+            val effectivePrompt = if (task.id == "preset_infobox_overview" && infoBoxStore != null) {
+                val yesterdayItems = infoBoxStore.getItemsFromYesterday()
+                val targetItems = if (yesterdayItems.isNotEmpty()) yesterdayItems else infoBoxStore.items.value.take(15)
+                infoBoxStore.buildDailyDigestPrompt(targetItems)
+            } else {
+                task.prompt
+            }
+
             val systemPrompt = """
                 You are an autonomous background assistant executing a scheduled recurring task.
                 Task: ${task.title}
                 Schedule: ${task.formattedSchedule()}
-                User instruction: ${task.prompt}
+                User instruction: $effectivePrompt
                 
                 Execute this task thoroughly, synthesize the findings, and provide a clear, high-yield summary.
             """.trimIndent()
@@ -46,10 +56,11 @@ class ScheduledTaskRunner(
                 val events = inferenceEngine.streamChat(
                     messages = listOf(
                         ChatMessage(role = "system", content = systemPrompt),
-                        ChatMessage(role = "user", content = task.prompt)
+                        ChatMessage(role = "user", content = effectivePrompt)
                     ),
                     tools = tools
                 )
+
                 val buffer = StringBuilder()
                 events.collect { event ->
                     when (event) {

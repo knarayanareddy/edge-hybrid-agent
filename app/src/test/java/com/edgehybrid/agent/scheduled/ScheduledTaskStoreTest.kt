@@ -21,7 +21,14 @@ class ScheduledTaskStoreTest {
     @Test
     fun testAll22PresetsLoadedByDefault() {
         val tasks = store.tasks.value
-        assertEquals("Must load all 22 preset recipes", 22, tasks.size)
+        assertEquals("Must load all preset recipes", 23, tasks.size)
+
+        val infoBoxTask = tasks.firstOrNull { it.id == "preset_infobox_overview" }
+        assertNotNull("Info Box task preset must exist", infoBoxTask)
+        assertEquals("Info Box Daily Overview", infoBoxTask?.title)
+        assertEquals(ScheduleRecurrence.DAILY, infoBoxTask?.recurrence)
+        assertEquals("📥", infoBoxTask?.iconEmoji)
+        assertFalse(infoBoxTask!!.isEnabled)
 
         // Verify key presets from screenshots
         val jobTask = tasks.firstOrNull { it.id == "preset_find_job" }
