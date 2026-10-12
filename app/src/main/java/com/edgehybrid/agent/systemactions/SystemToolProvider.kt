@@ -8,11 +8,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.add
 
 /**
  * Device and settings tools built on [SystemActionHandler] and [SamsungActions].
@@ -66,6 +69,13 @@ class SystemToolProvider @Inject constructor(
         const val LAUNCH_APP = "launch_app"
         const val OPEN_GALLERY = "open_gallery"
         const val SHARE_TEXT = "share_text"
+
+        // ---- mobile OS computer use (@oai/sky equivalent) ----
+        const val GET_SCREEN_ELEMENTS = "get_screen_elements"
+        const val CLICK_SCREEN_ELEMENT = "click_screen_element"
+        const val CLICK_SCREEN_COORDINATES = "click_screen_coordinates"
+        const val TYPE_SCREEN_TEXT = "type_screen_text"
+        const val PERFORM_SYSTEM_KEY = "perform_system_key"
     }
 
     /** Every tool this provider contributes, in catalog order. */
@@ -114,6 +124,67 @@ class SystemToolProvider @Inject constructor(
             withArg(
                 Names.SHARE_TEXT, "Open the Android share sheet with some text.",
                 "text", "The text to share.", "string", required = true
+            )
+        )
+
+        // ---- mobile OS computer use (@oai/sky equivalent) ----
+        add(query(Names.GET_SCREEN_ELEMENTS, "Inspect the active screen UI tree and return visible/clickable elements with numeric IDs, bounds, text, and descriptions."))
+        add(
+            withArg(
+                Names.CLICK_SCREEN_ELEMENT, "Click a specific UI element on screen by its numeric element ID from get_screen_elements.",
+                "element_id", "Numeric ID of the UI element to click.", "integer", required = true
+            )
+        )
+        add(
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = Names.CLICK_SCREEN_COORDINATES,
+                    description = "Dispatch a tap gesture to exact screen pixel coordinates (x, y).",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("x", buildJsonObject {
+                                put("type", "number")
+                                put("description", "X screen pixel coordinate.")
+                            })
+                            put("y", buildJsonObject {
+                                put("type", "number")
+                                put("description", "Y screen pixel coordinate.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("x"); add("y") })
+                        put("additionalProperties", false)
+                    }
+                )
+            )
+        )
+        add(
+            ToolDefinition(
+                function = FunctionDefinition(
+                    name = Names.TYPE_SCREEN_TEXT,
+                    description = "Input text into an on-screen element or focused input field.",
+                    parameters = buildJsonObject {
+                        put("type", "object")
+                        put("properties", buildJsonObject {
+                            put("text", buildJsonObject {
+                                put("type", "string")
+                                put("description", "Text to input.")
+                            })
+                            put("element_id", buildJsonObject {
+                                put("type", "integer")
+                                put("description", "Optional target element ID. If omitted, targets currently focused input.")
+                            })
+                        })
+                        put("required", buildJsonArray { add("text") })
+                        put("additionalProperties", false)
+                    }
+                )
+            )
+        )
+        add(
+            withArg(
+                Names.PERFORM_SYSTEM_KEY, "Perform an Android system navigation key action (back, home, recents, notifications, quick_settings).",
+                "action", "System action name: back, home, recents, notifications, quick_settings.", "string", required = true
             )
         )
     }
@@ -240,6 +311,13 @@ class SystemToolProvider @Inject constructor(
                     put("status", if (success) "Share sheet is open" else "Could not open the share sheet")
                 }.let { ToolExecutionOutcome(it.toString(), !success) }
             }
+
+            // ---- mobile OS computer use (@oai/sky equivalent) ----
+            Names.GET_SCREEN_ELEMENTS -> executeGetScreenElements()
+            Names.CLICK_SCREEN_ELEMENT -> executeClickScreenElement(arguments)
+            Names.CLICK_SCREEN_COORDINATES -> executeClickScreenCoordinates(arguments)
+            Names.TYPE_SCREEN_TEXT -> executeTypeScreenText(arguments)
+            Names.PERFORM_SYSTEM_KEY -> executePerformSystemKey(arguments)
 
             else -> null
         }
@@ -375,4 +453,98 @@ class SystemToolProvider @Inject constructor(
             }
         )
     )
+
+    private fun executeGetScreenElements(): ToolExecutionOutcome {
+        val service = com.edgehybrid.agent.hardware.accessibility.EdgeAccessibilityService.instance
+            ?: return ToolExecutionOutcome(
+                buildJsonObject {
+                    put("error", "Accessibility service is not active.")
+                    put("message", "Please enable Edge Hybrid Agent in Android Accessibility settings to inspect and control screen.")
+                }.toString(),
+                isError = true
+            )
+
+        val elements = service.inspectScreen()
+        return buildJsonObject {
+            put("count", elements.size)
+            put(
+                "elements",
+                kotlinx.serialization.json.Json.encodeToJsonElement(
+                    kotlinx.serialization.builtins.ListSerializer(
+                        com.edgehybrid.agent.hardware.accessibility.ScreenElement.serializer()
+                    ),
+                    elements
+                )
+            )
+        }.let { ok("screen_elements", it.toString()) }
+    }
+
+    private fun executeClickScreenElement(arguments: JsonObject): ToolExecutionOutcome {
+        val elementId = arguments["element_id"]?.jsonPrimitive?.intOrNull
+            ?: throw SkillExecutionException("Element ID is required")
+        val service = com.edgehybrid.agent.hardware.accessibility.EdgeAccessibilityService.instance
+            ?: return ToolExecutionOutcome(
+                """{"error": "Accessibility service not active"}""",
+                isError = true
+            )
+        val success = service.clickElement(elementId)
+        return buildJsonObject {
+            put("element_id", elementId)
+            put("clicked", success)
+            put("status", if (success) "Clicked element $elementId" else "Could not click element $elementId")
+        }.let { ToolExecutionOutcome(it.toString(), !success) }
+    }
+
+    private fun executeClickScreenCoordinates(arguments: JsonObject): ToolExecutionOutcome {
+        val x = arguments["x"]?.jsonPrimitive?.doubleOrNull?.toFloat()
+            ?: throw SkillExecutionException("X coordinate is required")
+        val y = arguments["y"]?.jsonPrimitive?.doubleOrNull?.toFloat()
+            ?: throw SkillExecutionException("Y coordinate is required")
+        val service = com.edgehybrid.agent.hardware.accessibility.EdgeAccessibilityService.instance
+            ?: return ToolExecutionOutcome(
+                """{"error": "Accessibility service not active"}""",
+                isError = true
+            )
+        val success = kotlinx.coroutines.runBlocking { service.clickCoordinates(x, y) }
+        return buildJsonObject {
+            put("x", x)
+            put("y", y)
+            put("clicked", success)
+            put("status", if (success) "Clicked at ($x, $y)" else "Could not dispatch tap at ($x, $y)")
+        }.let { ToolExecutionOutcome(it.toString(), !success) }
+    }
+
+    private fun executeTypeScreenText(arguments: JsonObject): ToolExecutionOutcome {
+        val text = arguments.str("text")
+            ?: throw SkillExecutionException("Text to type is required")
+        val elementId = arguments["element_id"]?.jsonPrimitive?.intOrNull
+        val service = com.edgehybrid.agent.hardware.accessibility.EdgeAccessibilityService.instance
+            ?: return ToolExecutionOutcome(
+                """{"error": "Accessibility service not active"}""",
+                isError = true
+            )
+        val success = service.typeText(text, elementId)
+        return buildJsonObject {
+            put("text", text)
+            elementId?.let { put("element_id", it) }
+            put("typed", success)
+            put("status", if (success) "Typed text successfully" else "Could not input text")
+        }.let { ToolExecutionOutcome(it.toString(), !success) }
+    }
+
+    private fun executePerformSystemKey(arguments: JsonObject): ToolExecutionOutcome {
+        val action = arguments.str("action")
+            ?: throw SkillExecutionException("System action is required (e.g. back, home, recents)")
+        val service = com.edgehybrid.agent.hardware.accessibility.EdgeAccessibilityService.instance
+            ?: return ToolExecutionOutcome(
+                """{"error": "Accessibility service not active"}""",
+                isError = true
+            )
+        val success = service.performSystemAction(action)
+        return buildJsonObject {
+            put("action", action)
+            put("performed", success)
+            put("status", if (success) "Performed system action '$action'" else "Failed to perform system action '$action'")
+        }.let { ToolExecutionOutcome(it.toString(), !success) }
+    }
 }

@@ -167,6 +167,10 @@ class ConfirmationGate @Inject constructor(
         "launch_app" -> "Open an app"
         "open_gallery" -> "Open gallery"
         "share_text" -> "Share text"
+        "click_screen_element" -> "Click on-screen element"
+        "click_screen_coordinates" -> "Tap screen coordinates"
+        "type_screen_text" -> "Type on-screen text"
+        "perform_system_key" -> "Perform system navigation key"
         else -> "Run ${toolName.replace('_', ' ')}"
         }
     }
@@ -203,6 +207,10 @@ class ConfirmationGate @Inject constructor(
             "launch_app" -> "This will open an app on your phone."
             "open_gallery" -> "This will open your photo gallery."
             "share_text" -> "This will open the share sheet with the given text."
+            "click_screen_element" -> "This will tap the chosen UI element on your screen."
+            "click_screen_coordinates" -> "This will dispatch a touch event to coordinates on your screen."
+            "type_screen_text" -> "This will enter text into an input field on your screen."
+            "perform_system_key" -> "This will press a system key (back, home, recents, or notifications)."
             else -> "The agent wants to run this action."
         }
     }

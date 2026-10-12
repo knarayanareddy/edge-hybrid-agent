@@ -26,7 +26,8 @@ class SystemToolTieringTest {
         "get_network_status",
         "get_camera_hardware",
         "get_device_details",
-        "get_samsung_capabilities"
+        "get_samsung_capabilities",
+        "get_screen_elements"
     )
 
     private val gatedDeviceTools = listOf(
@@ -43,7 +44,11 @@ class SystemToolTieringTest {
         "set_media_volume",
         "launch_app",
         "open_gallery",
-        "share_text"
+        "share_text",
+        "click_screen_element",
+        "click_screen_coordinates",
+        "type_screen_text",
+        "perform_system_key"
     )
 
     @Test

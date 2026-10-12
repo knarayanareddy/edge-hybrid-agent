@@ -11,4 +11,5 @@
     <string name="tool_completed">Completed %1$s</string>
     <string name="tool_failed">Failed %1$s</string>
     <string name="generating">Generating</string>
+    <string name="accessibility_service_description">Enables Edge Hybrid Agent to observe and interact with the user interface to perform automated tasks on your Samsung device.</string>
 </resources>

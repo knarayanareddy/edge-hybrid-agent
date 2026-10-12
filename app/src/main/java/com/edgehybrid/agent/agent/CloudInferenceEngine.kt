@@ -98,7 +98,7 @@ class CloudInferenceEngine @Inject constructor(
         val request = ChatCompletionRequest(
             model = effectiveModel,
             messages = messages.map(ChatMessage::toApiMessage),
-            tools = if (hasTools) tools else null,
+            tools = if (hasTools) com.edgehybrid.agent.core.inference.PromptCacheEnricher.sortToolDefinitions(tools) else null,
             toolChoice = if (hasTools) "auto" else null
         )
 

@@ -60,7 +60,8 @@ class ToolConfirmationPolicy @Inject constructor() {
             "get_camera_hardware",
             "list_installed_apps",
             "get_device_details",
-            "get_samsung_capabilities"
+            "get_samsung_capabilities",
+            "get_screen_elements"
         )
 
         val STRICT_TOOLS = setOf(
