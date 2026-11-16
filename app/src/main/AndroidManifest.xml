@@ -4,6 +4,8 @@
     <!-- Network Connectivity -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Required by the native haptic/vibration action. Normal permission; no runtime prompt. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Foreground Services for Uninterrupted Multi-step Agent & MCP Execution -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
