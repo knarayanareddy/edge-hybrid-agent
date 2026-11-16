@@ -76,6 +76,24 @@ class ProviderProtocolException(
     cause: Throwable? = null
 ) : RuntimeException(message, cause)
 
+class MissingProviderApiKeyException(val providerName: String) :
+    IllegalStateException("No API key is configured for $providerName")
+
+/** Resolve credentials without ever crossing them between providers. */
+internal fun resolveProviderApiKey(
+    isGoogleAiStudio: Boolean,
+    geminiApiKey: String?,
+    openRouterApiKey: String?,
+    settingsApiKey: String?,
+    allowLegacyGoogleFallback: Boolean
+): String? = if (isGoogleAiStudio) {
+    geminiApiKey?.takeIf(String::isNotBlank)
+        ?: if (allowLegacyGoogleFallback) settingsApiKey?.takeIf(String::isNotBlank) else null
+} else {
+    openRouterApiKey?.takeIf(String::isNotBlank)
+        ?: settingsApiKey?.takeIf(String::isNotBlank)
+}
+
 @Singleton
 class CloudInferenceEngine @Inject constructor(
     private val httpClient: HttpClient,
@@ -131,11 +149,15 @@ class CloudInferenceEngine @Inject constructor(
             val isGoogleAiStudio =
                 currentProvider == com.edgehybrid.agent.data.local.SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO
 
-            val effectiveApiKey: String? = if (isGoogleAiStudio) {
-                keyStore?.getGeminiApiKey()?.takeIf { it.isNotBlank() } ?: settings.apiKey
-            } else {
-                keyStore?.getOpenRouterApiKey(currentKeyIndex)?.takeIf { it.isNotBlank() } ?: settings.apiKey
-            }
+            // CLOUD_API_KEY is the OpenRouter key in this project. Only legacy engine
+            // construction without a SecureKeyStore may reuse settings.apiKey for Google.
+            val effectiveApiKey = resolveProviderApiKey(
+                isGoogleAiStudio = isGoogleAiStudio,
+                geminiApiKey = keyStore?.getGeminiApiKey(),
+                openRouterApiKey = keyStore?.getOpenRouterApiKey(currentKeyIndex),
+                settingsApiKey = settings.apiKey,
+                allowLegacyGoogleFallback = keyStore == null
+            )
 
 
             if (isGoogleAiStudio && effectiveApiKey.isNullOrBlank() && !hasFallenBackFrom402) {
@@ -148,6 +170,11 @@ class CloudInferenceEngine @Inject constructor(
                 currentKeyIndex = 0
                 currentRequest = currentRequest.copy(model = FREE_FALLBACK_MODEL)
                 continue
+            }
+
+            if (keyStore != null && effectiveApiKey.isNullOrBlank()) {
+                val providerName = if (isGoogleAiStudio) "Google AI Studio" else "OpenRouter"
+                throw MissingProviderApiKeyException(providerName)
             }
 
             val effectiveBaseUrl: String = if (isGoogleAiStudio) {

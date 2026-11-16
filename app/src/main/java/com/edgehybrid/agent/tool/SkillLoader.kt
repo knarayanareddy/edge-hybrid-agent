@@ -17,6 +17,8 @@ import com.edgehybrid.agent.data.model.ToolDefinition
 import com.edgehybrid.agent.nativeactions.NativeActionHandler
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.headers
@@ -28,6 +30,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import java.net.URLEncoder
+import java.net.URI
+import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -51,6 +55,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 data class ToolExecutionOutcome(
     val content: String,
@@ -74,6 +80,18 @@ class BuiltInSkillLoader @Inject constructor(
     private val systemToolProvider: com.edgehybrid.agent.systemactions.SystemToolProvider,
     @ApplicationContext private val context: Context
 ) : SkillLoader {
+
+    // Web fetches must not follow redirects: otherwise a public URL could redirect to a
+    // local/private address after the SSRF validation below.
+    private val safeWebClient = HttpClient(CIO) {
+        expectSuccess = false
+        followRedirects = false
+        install(HttpTimeout) {
+            requestTimeoutMillis = 30_000L
+            connectTimeoutMillis = 10_000L
+            socketTimeoutMillis = 20_000L
+        }
+    }
 
     private val dynamicTools = ConcurrentHashMap<String, CustomToolDef>()
     private val stagedTools = ConcurrentHashMap<String, CustomToolDef>()
@@ -1596,84 +1614,99 @@ class BuiltInSkillLoader @Inject constructor(
             ?.takeIf(String::isNotEmpty)
             ?: return ToolExecutionOutcome(
                 buildJsonObject { put("error", "Search query is required") }.toString(),
-                false
+                true
             )
         val encoded = URLEncoder.encode(query, StandardCharsets.UTF_8.name())
+        data class SearchSource(val title: String, val url: String, val snippet: String)
+        val sources = linkedMapOf<String, SearchSource>()
 
-        var searchResultText: String? = null
-        var searchSource = "DuckDuckGo"
-        var searchUrl = ""
-
+        // DuckDuckGo Instant Answers are a useful first source, but they are not a full
+        // web-results API. Preserve a URL for every result that actually includes one.
         try {
-            val ddgResponse = httpClient.get("https://api.duckduckgo.com/?q=$encoded&format=json&no_html=1&skip_disambig=1") {
+            val response = httpClient.get("https://api.duckduckgo.com/?q=$encoded&format=json&no_html=1&skip_disambig=1") {
                 headers {
-                    append(HttpHeaders.UserAgent, "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36")
+                    append(HttpHeaders.UserAgent, "EdgeHybridAgent/1.0 (Android)")
                     append(HttpHeaders.Accept, "application/json")
                 }
             }
-            if (ddgResponse.status.value in 200..299) {
-                val body = ddgResponse.body<JsonObject>()
-                val abstractText = body["AbstractText"]?.jsonPrimitive?.content?.trim().orEmpty()
-                val abstractUrl = body["AbstractURL"]?.jsonPrimitive?.content.orEmpty()
-                val relatedArray = body["RelatedTopics"]?.jsonArray
-                val relatedSnippets = mutableListOf<String>()
-                relatedArray?.forEach { elem ->
-                    if (elem is JsonObject && elem.containsKey("Text")) {
-                        elem["Text"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }?.let {
-                            if (relatedSnippets.size < 5) relatedSnippets.add(it)
-                        }
-                    }
+            if (response.status.value in 200..299) {
+                val body = response.body<JsonObject>()
+                val abstractText = body["AbstractText"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
+                val abstractUrl = body["AbstractURL"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val heading = body["Heading"]?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank) ?: query
+                if (abstractText.isNotBlank() && abstractUrl.startsWith("https://")) {
+                    sources[abstractUrl] = SearchSource(heading, abstractUrl, abstractText)
                 }
-                if (abstractText.isNotBlank()) {
-                    searchResultText = abstractText
-                    searchUrl = abstractUrl
-                } else if (relatedSnippets.isNotEmpty()) {
-                    searchResultText = relatedSnippets.joinToString("\n• ")
-                }
-            }
-        } catch (_: Exception) {}
 
-        // Fallback to Wikipedia Live Search API (extremely reliable for hardware, devices, concepts)
-        if (searchResultText.isNullOrBlank()) {
-            try {
-                val wikiUrl = "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=$encoded&utf8=&format=json"
-                val wikiResp = httpClient.get(wikiUrl) {
-                    headers {
-                        append(HttpHeaders.UserAgent, "EdgeHybridAgent/1.0 (Android 14; S23 Ultra)")
+                fun collectRelated(elements: JsonArray?) {
+                    elements?.forEach { element ->
+                        val item = element as? JsonObject ?: return@forEach
+                        val text = item["Text"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
+                        val url = item["FirstURL"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                        if (text.isNotBlank() && url.startsWith("https://") && sources.size < 6) {
+                            val title = text.substringBefore(" - ").take(120)
+                            sources.putIfAbsent(url, SearchSource(title, url, text))
+                        }
+                        collectRelated(item["Topics"] as? JsonArray)
                     }
                 }
-                if (wikiResp.status.value in 200..299) {
-                    val wikiBody = wikiResp.body<JsonObject>()
-                    val searchItems = wikiBody["query"]?.jsonObject?.get("search")?.jsonArray
-                    if (searchItems != null && searchItems.isNotEmpty()) {
-                        val snippets = mutableListOf<String>()
-                        for (item in searchItems.take(4)) {
-                            val itemObj = item as? JsonObject ?: continue
-                            val title = itemObj["title"]?.jsonPrimitive?.content ?: ""
-                            val rawSnippet = itemObj["snippet"]?.jsonPrimitive?.content ?: ""
-                            val cleanSnippet = rawSnippet.replace(Regex("<[^>]+>"), "")
-                            if (title.isNotBlank() && cleanSnippet.isNotBlank()) {
-                                snippets.add("**$title**: $cleanSnippet")
-                            }
-                        }
-                        if (snippets.isNotEmpty()) {
-                            searchResultText = snippets.joinToString("\n\n")
-                            searchSource = "Wikipedia Live Search"
-                        }
-                    }
-                }
-            } catch (_: Exception) {}
+                collectRelated(body["RelatedTopics"] as? JsonArray)
+            }
+        } catch (_: Exception) {
+            // Fall through to Wikipedia's public search endpoint.
         }
 
-        val finalSummary = searchResultText ?: "Live search query completed for \"$query\". No instant snippet was returned by public API indexes; you may ask for further related specifications or use wikipedia_search."
+        if (sources.size < 3) {
+            try {
+                val url = "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=$encoded&utf8=1&format=json&srlimit=5"
+                val response = httpClient.get(url) {
+                    headers { append(HttpHeaders.UserAgent, "EdgeHybridAgent/1.0 (Android; cited search results)") }
+                }
+                if (response.status.value in 200..299) {
+                    val body = response.body<JsonObject>()
+                    val results = body["query"]?.jsonObject?.get("search") as? JsonArray
+                    results?.forEach { element ->
+                        val item = element as? JsonObject ?: return@forEach
+                        val title = item["title"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                        val rawSnippet = item["snippet"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                        val snippet = rawSnippet
+                            .replace(Regex("<[^>]+>"), "")
+                            .replace("&quot;", "\"")
+                            .replace("&#039;", "'")
+                            .replace("&amp;", "&")
+                            .trim()
+                        if (title.isNotBlank() && snippet.isNotBlank()) {
+                            val page = URLEncoder.encode(title, StandardCharsets.UTF_8.name()).replace("+", "_")
+                            val sourceUrl = "https://en.wikipedia.org/wiki/$page"
+                            sources.putIfAbsent(sourceUrl, SearchSource(title, sourceUrl, snippet))
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // A structured empty result is better than inventing citations.
+            }
+        }
+
+        val selected = sources.values.take(6)
         val result = buildJsonObject {
             put("query", query)
-            put("summary", finalSummary)
-            put("source", searchSource)
-            if (searchUrl.isNotBlank()) put("url", searchUrl)
-            put("status", "success")
+            put("status", if (selected.isEmpty()) "no_results" else "success")
+            put(
+                "summary",
+                selected.joinToString("\n\n") { "${it.title}: ${it.snippet}" }
+                    .ifBlank { "No citable results were returned for this search." }
+            )
+            put("sources", buildJsonArray {
+                selected.forEach { source ->
+                    add(buildJsonObject {
+                        put("title", source.title)
+                        put("url", source.url)
+                        put("snippet", source.snippet)
+                    })
+                }
+            })
         }
-        return ToolExecutionOutcome(result.toString(), false)
+        return ToolExecutionOutcome(result.toString(), selected.isEmpty())
     }
 
     // 20. Extract Webpage Content
@@ -1683,21 +1716,28 @@ class BuiltInSkillLoader @Inject constructor(
             ?: throw SkillExecutionException("URL is required")
 
         try {
-            val response = httpClient.get(urlStr)
-            val raw = response.bodyAsText()
+            val safeUri = validatePublicWebUri(urlStr)
+            val response = safeWebClient.get(safeUri.toString())
+            val raw = response.bodyAsText().take(1_000_000)
             val noScript = raw.replace(Regex("<script[\\s\\S]*?</script>", RegexOption.IGNORE_CASE), "")
                 .replace(Regex("<style[\\s\\S]*?</style>", RegexOption.IGNORE_CASE), "")
+            val title = Regex("(?is)<title[^>]*>(.*?)</title>").find(raw)?.groupValues?.getOrNull(1)
+                ?.replace(Regex("<[^>]+>"), " ")?.replace(Regex("\\s+"), " ")?.trim().orEmpty()
             val cleanText = noScript.replace(Regex("<[^>]+>"), " ")
                 .replace(Regex("\\s+"), " ")
                 .trim()
-                .take(2000)
+                .take(12_000)
 
+            val isError = response.status.value !in 200..299 || cleanText.isBlank()
             val result = buildJsonObject {
-                put("url", urlStr)
-                put("status", response.status.value)
+                put("url", safeUri.toString())
+                put("http_status", response.status.value)
+                if (title.isNotBlank()) put("title", title)
                 put("content_preview", cleanText)
+                put("status", if (isError) "failed" else "success")
+                if (isError) put("error", "The page returned HTTP ${response.status.value} or contained no extractable text.")
             }
-            return ToolExecutionOutcome(result.toString(), false)
+            return ToolExecutionOutcome(result.toString(), isError)
         } catch (e: Exception) {
             val result = buildJsonObject {
                 put("url", urlStr)
@@ -1705,6 +1745,52 @@ class BuiltInSkillLoader @Inject constructor(
             }
             return ToolExecutionOutcome(result.toString(), true)
         }
+    }
+
+    private suspend fun validatePublicWebUri(raw: String): URI {
+        val uri = runCatching { URI(raw.trim()) }
+            .getOrElse { throw SkillExecutionException("Enter a valid public HTTPS webpage URL") }
+        val scheme = uri.scheme?.lowercase()
+        val host = uri.host?.lowercase()?.trimEnd('.').orEmpty()
+        if (scheme !in setOf("https", "http") || host.isBlank() || uri.userInfo != null ||
+            host == "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
+            throw SkillExecutionException("Only public HTTP or HTTPS webpage URLs are allowed")
+        }
+        val addresses = runCatching {
+            withContext(Dispatchers.IO) { InetAddress.getAllByName(host).toList() }
+        }.getOrElse { throw SkillExecutionException("Could not resolve the webpage host") }
+        if (addresses.isEmpty() || addresses.any { !isPublicWebAddress(it) }) {
+            throw SkillExecutionException("Local, private, and reserved network addresses are blocked")
+        }
+        return uri
+    }
+
+    private fun isPublicWebAddress(address: InetAddress): Boolean {
+        if (address.isAnyLocalAddress || address.isLoopbackAddress || address.isLinkLocalAddress ||
+            address.isSiteLocalAddress || address.isMulticastAddress) return false
+        val bytes = address.address.map { it.toInt() and 0xff }
+        if (bytes.size == 16) {
+            if ((bytes[0] and 0xfe) == 0xfc) return false // IPv6 unique-local fc00::/7
+            if (bytes[0] == 0xfe && (bytes[1] and 0xc0) == 0x80) return false // fe80::/10
+            if (bytes.take(10).all { it == 0 } && bytes[10] == 0xff && bytes[11] == 0xff) {
+                return isPublicIpv4(bytes.takeLast(4))
+            }
+            return true
+        }
+        return isPublicIpv4(bytes)
+    }
+
+    private fun isPublicIpv4(bytes: List<Int>): Boolean {
+        if (bytes.size != 4) return false
+        val (a, b, c, _) = bytes
+        if (a == 0 || a == 10 || a == 127 || a >= 224) return false
+        if (a == 100 && b in 64..127) return false // CGNAT
+        if (a == 169 && b == 254) return false
+        if (a == 172 && b in 16..31) return false
+        if (a == 192 && b == 168) return false
+        if (a == 192 && b == 0 && c == 0) return false
+        if (a == 198 && b in 18..19) return false
+        return true
     }
 
     // 21. Plan Public Transit Journey

@@ -68,7 +68,8 @@ enum class ToolActivityStatus {
 data class ToolActivityUi(
     val callId: String,
     val toolName: String,
-    val status: ToolActivityStatus
+    val status: ToolActivityStatus,
+    val resultPreview: String = ""
 )
 
 @HiltViewModel
@@ -80,7 +81,9 @@ class ChatViewModel @Inject constructor(
         ),
     private val keyStore: com.edgehybrid.agent.data.local.SecureKeyStore? = null,
     private val groqWhisperService: com.edgehybrid.agent.data.remote.GroqWhisperService? = null,
-    private val chatDao: com.edgehybrid.agent.data.local.ChatDao? = null
+    private val chatDao: com.edgehybrid.agent.data.local.ChatDao? = null,
+    private val libraryStore: com.edgehybrid.agent.library.LibraryStore? = null,
+    private val ragContextAugmenter: com.edgehybrid.agent.rag.RagContextAugmenter? = null
 ) : ViewModel() {
 
     companion object {
@@ -370,7 +373,8 @@ class ChatViewModel @Inject constructor(
 
         startAgent(
             baseHistory = history,
-            continuationText = null
+            continuationText = null,
+            augmentWithLibraryContext = true
         )
     }
 
@@ -407,7 +411,8 @@ class ChatViewModel @Inject constructor(
     private fun startAgent(
         baseHistory: List<ChatMessage>,
         continuationText: String?,
-        targetAssistantMessageId: String? = null
+        targetAssistantMessageId: String? = null,
+        augmentWithLibraryContext: Boolean = false
     ) {
         val assistantMessageId = targetAssistantMessageId ?: UUID.randomUUID().toString()
         pendingRetry = PendingRetry(
@@ -431,11 +436,25 @@ class ChatViewModel @Inject constructor(
 
         generationJob = viewModelScope.launch {
             try {
+                val requestHistory = if (augmentWithLibraryContext && continuationText == null) {
+                    libraryStore?.ensureRagIndex()
+                    val lastUserIndex = baseHistory.indexOfLast { it.role == ChatRoles.USER }
+                    val augmenter = ragContextAugmenter
+                    if (lastUserIndex >= 0 && augmenter != null) {
+                        val original = baseHistory[lastUserIndex]
+                        val query = original.content.orEmpty()
+                            .substringBefore("\n\n[Document content starts below]")
+                        val enriched = runCatching { augmenter.augmentPromptWithContext(query) }.getOrDefault(query)
+                        if (enriched != query) baseHistory.toMutableList().apply {
+                            this[lastUserIndex] = original.copy(content = enriched + original.content.orEmpty().removePrefix(query))
+                        } else baseHistory
+                    } else baseHistory
+                } else baseHistory
                 val events = if (continuationText == null) {
-                    agentLoop.streamChat(baseHistory)
+                    agentLoop.streamChat(requestHistory)
                 } else {
                     agentLoop.continueAfterDisconnect(
-                        history = baseHistory,
+                        history = requestHistory,
                         partialText = continuationText
                     )
                 }
@@ -495,7 +514,8 @@ class ChatViewModel @Inject constructor(
                                         ToolActivityStatus.SUCCEEDED
                                     } else {
                                         ToolActivityStatus.FAILED
-                                    }
+                                    },
+                                    resultPreview = event.resultPreview
                                 )
                             } else {
                                 activity

@@ -222,6 +222,24 @@ object MarkdownRenderer {
     ) {
         var i = 0
         while (i < text.length) {
+            // Render source citations and ordinary Markdown links as real URL annotations.
+            if (text[i] == '[') {
+                val labelEnd = text.indexOf("](", i + 1)
+                val urlEnd = if (labelEnd >= 0) text.indexOf(')', labelEnd + 2) else -1
+                if (labelEnd > i + 1 && urlEnd > labelEnd + 2) {
+                    val url = text.substring(labelEnd + 2, urlEnd).trim()
+                    if (url.startsWith("https://", ignoreCase = true) || url.startsWith("http://", ignoreCase = true)) {
+                        pushStringAnnotation(tag = "URL", annotation = url)
+                        pushStyle(SpanStyle(color = palette.accent, textDecoration = TextDecoration.Underline))
+                        appendInline(text.substring(i + 1, labelEnd), palette, mono, baseSize)
+                        pop()
+                        pop()
+                        i = urlEnd + 1
+                        continue
+                    }
+                }
+            }
+
             // Inline code outranks every other inline span. Without this, the `**`
             // inside `` `**literal**` `` was consumed as bold before the parser
             // ever reached the opening backtick.

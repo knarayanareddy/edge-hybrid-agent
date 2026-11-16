@@ -40,6 +40,9 @@ val cloudBaseUrl = configurationValue(
     defaultValue = "https://openrouter.ai/api/v1"
 )
 val cloudApiKey = configurationValue("EDGE_CLOUD_API_KEY")
+val geminiApiKey = configurationValue("EDGE_GEMINI_API_KEY").ifBlank {
+    configurationValue("GEMINI_API_KEY")
+}
 
 /**
  * Builds the OpenRouter key pool used for 429 rotation.
@@ -67,17 +70,33 @@ fun buildKeyPool(primary: String, maxSpare: Int = 8): String {
 }
 
 val cloudKeyPool = buildKeyPool(cloudApiKey)
-// Which provider the build defaults to. One of: openrouter, google_ai_studio.
-val cloudProvider = configurationValue(
+
+// Prefer the provider for which this build actually has a key. Explicit provider/model
+// configuration still wins, but a key supplied only for OpenRouter must never make a fresh
+// install select Google AI Studio (or send the OpenRouter key to Google's endpoint).
+val defaultCloudProvider = if (geminiApiKey.isNotBlank()) {
+    "google_ai_studio"
+} else {
+    "openrouter"
+}
+val configuredCloudProvider = configurationValue(
     name = "EDGE_CLOUD_PROVIDER",
-    defaultValue = "google_ai_studio"
-)
+    defaultValue = defaultCloudProvider
+).trim().lowercase()
+val cloudProvider = when (configuredCloudProvider) {
+    "google_ai_studio" -> "google_ai_studio"
+    "openrouter" -> "openrouter"
+    else -> defaultCloudProvider
+}
 val cloudModel = configurationValue(
     name = "EDGE_CLOUD_MODEL",
-    defaultValue = "gemini-3.8-flash"
+    defaultValue = if (cloudProvider == "google_ai_studio") {
+        "gemini-2.5-flash"
+    } else {
+        "google/gemini-3.8-flash"
+    }
 )
 val typesafeApiKey = configurationValue("EDGE_TYPESAFE_API_KEY")
-val geminiApiKey = configurationValue("EDGE_GEMINI_API_KEY").ifBlank { configurationValue("GEMINI_API_KEY") }
 val groqApiKey = configurationValue("GROQ_API_KEY")
 val mcpEndpoint = configurationValue("EDGE_MCP_ENDPOINT")
 val mcpToken = configurationValue("EDGE_MCP_BEARER_TOKEN")

@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Edge Hybrid Agent</string>
     <string name="chat_title">Edge Agent</string>
-    <string name="chat_input_hint">Ask a question or request a tool action</string>
+    <string name="chat_input_hint">Message</string>
     <string name="send">Send</string>
     <string name="retry">Retry</string>
     <string name="recovering_connection">Reconnecting and continuing the interrupted response…</string>

@@ -164,6 +164,7 @@ class OpenApiPluginEngineTest {
 
         assertEquals(2, tools.size)
         assertTrue(registry.toolNames().contains("weather_getForecast"))
+        assertEquals("weather", registry.pluginIdForTool("weather_getForecast"))
 
         val callArgs = buildJsonObject {
             put("city", "Amsterdam")
@@ -175,5 +176,50 @@ class OpenApiPluginEngineTest {
         assertFalse(outcome!!.isError)
         assertTrue(outcome.content.contains("Amsterdam"))
         assertTrue(outcome.content.contains("Partly Cloudy"))
+
+        registry.setEnabled("weather", false)
+        assertFalse(registry.toolNames().contains("weather_getForecast"))
+        val disabledOutcome = registry.executeTool("weather_getForecast", callArgs)
+        assertNotNull(disabledOutcome)
+        assertTrue(disabledOutcome!!.isError)
+        registry.setEnabled("weather", true)
+        assertTrue(registry.toolNames().contains("weather_getForecast"))
+    }
+
+    @Test
+    fun `api key security scheme is applied as an HTTP header`() = runTest {
+        var receivedKey: String? = null
+        val client = HttpClient(MockEngine { request ->
+            receivedKey = request.headers["X-API-Key"]
+            respond("{\"ok\":true}", status = HttpStatusCode.OK)
+        })
+        val apiKeySpec = sampleOpenApiSpec.replace(
+            "\"paths\": {",
+            "\"components\": {\"securitySchemes\": {\"key\": {\"type\": \"apiKey\", \"in\": \"header\", \"name\": \"X-API-Key\"}}}, " +
+                "\"security\": [{\"key\": []}], \"paths\": {"
+        )
+        val registry = PluginRegistry(client)
+        registry.registerOpenApi("weather", "Weather", "", apiKeySpec, token = "private-key")
+        val args = buildJsonObject { put("city", "Delft") }
+        val outcome = registry.executeTool("weather_getForecast", args)
+
+        assertFalse(outcome!!.isError)
+        assertEquals("private-key", receivedKey)
+    }
+
+    @Test
+    fun `plugin registry rejects non-HTTPS and local endpoints`() {
+        val registry = PluginRegistry(HttpClient(MockEngine { request ->
+            respond("{}", status = HttpStatusCode.OK)
+        }))
+        val insecure = sampleOpenApiSpec.replace("https://api.weather-service.com", "http://api.weather-service.com")
+        val local = sampleOpenApiSpec.replace("https://api.weather-service.com", "https://127.0.0.1")
+
+        assertTrue(runCatching {
+            registry.registerOpenApi("weather", "Weather", "", insecure)
+        }.isFailure)
+        assertTrue(runCatching {
+            registry.registerOpenApi("weather", "Weather", "", local)
+        }.isFailure)
     }
 }

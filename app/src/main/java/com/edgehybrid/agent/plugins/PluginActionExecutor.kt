@@ -33,7 +33,8 @@ class PluginActionExecutor(
         endpoint: ParsedPluginEndpoint,
         arguments: JsonObject,
         bearerToken: String? = null,
-        extraHeaders: Map<String, String> = emptyMap()
+        extraHeaders: Map<String, String> = emptyMap(),
+        extraQueryParams: Map<String, String> = emptyMap()
     ): ToolExecutionOutcome = withContext(Dispatchers.IO) {
         try {
             // 1. Resolve path parameters
@@ -54,6 +55,12 @@ class PluginActionExecutor(
                 }
             }
 
+            extraQueryParams.forEach { (name, value) ->
+                val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8.toString())
+                val encodedValue = URLEncoder.encode(value, StandardCharsets.UTF_8.toString())
+                queryPairs.removeAll { it.substringBefore('=') == encodedName }
+                queryPairs.add("$encodedName=$encodedValue")
+            }
             val queryString = if (queryPairs.isNotEmpty()) "?${queryPairs.joinToString("&")}" else ""
             val fullUrl = "${baseUrl.trimEnd('/')}/${resolvedPath.trimStart('/')}$queryString"
 

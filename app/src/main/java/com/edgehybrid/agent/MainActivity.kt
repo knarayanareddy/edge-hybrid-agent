@@ -28,7 +28,6 @@ import javax.inject.Inject
 
 import com.edgehybrid.agent.ui.components.AuraBottomNavigationBar
 import com.edgehybrid.agent.ui.components.AuraHeader
-import com.edgehybrid.agent.ui.theme.AuraTokens
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.material.icons.automirrored.filled.MenuOpen
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -58,6 +57,12 @@ class MainActivity : ComponentActivity() {
     lateinit var mcpRegistry: McpServerRegistry
 
     @Inject
+    lateinit var pluginRegistry: com.edgehybrid.agent.plugins.PluginRegistry
+
+    @Inject
+    lateinit var pluginPermissionStore: com.edgehybrid.agent.plugins.PluginPermissionStore
+
+    @Inject
     lateinit var taskStore: com.edgehybrid.agent.scheduled.ScheduledTaskStore
 
     @Inject
@@ -79,6 +84,8 @@ class MainActivity : ComponentActivity() {
                     lessonsDao = lessonsDao,
                     skillLoader = skillLoader,
                     mcpRegistry = mcpRegistry,
+                    pluginRegistry = pluginRegistry,
+                    pluginPermissionStore = pluginPermissionStore,
                     userSkillStore = userSkillStore,
                     taskStore = taskStore,
                     libraryStore = libraryStore,
@@ -106,6 +113,8 @@ fun MainAppScreen(
     lessonsDao: LessonsDao,
     skillLoader: SkillLoader,
     mcpRegistry: McpServerRegistry,
+    pluginRegistry: com.edgehybrid.agent.plugins.PluginRegistry,
+    pluginPermissionStore: com.edgehybrid.agent.plugins.PluginPermissionStore,
     userSkillStore: com.edgehybrid.agent.skills.UserSkillStore,
     taskStore: com.edgehybrid.agent.scheduled.ScheduledTaskStore,
     libraryStore: com.edgehybrid.agent.library.LibraryStore,
@@ -133,39 +142,40 @@ fun MainAppScreen(
 
     Scaffold(
         topBar = {
-            AuraHeader(
-                title = if (selectedTab == TAB_CHAT) {
-                    // On Chat the bar names the conversation, not the tab: "Chat" is
-                    // already implied by being on it, and the session name is the
-                    // thing worth the space.
-                    chatState.sessions.firstOrNull { it.id == chatState.currentSessionId }
-                        ?.title
-                        ?.takeIf { it.isNotBlank() }
-                        ?: "New conversation"
-                } else {
-                    tabTitle
-                },
-                onProfileClick = { selectedTab = TAB_SETTINGS },
-                actions = if (selectedTab == TAB_CHAT) {
-                    {
-                        IconButton(onClick = chatViewModel::toggleSessionDrawer) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.MenuOpen,
-                                contentDescription = "Conversations"
-                            )
+            // Feature screens own their own back/title bars. Keep one shared compact
+            // header for Chat and Device Tools rather than stacking duplicate app bars.
+            if (selectedTab == TAB_CHAT || selectedTab == TAB_TOOLS) {
+                AuraHeader(
+                    title = if (selectedTab == TAB_CHAT) {
+                        chatState.sessions.firstOrNull { it.id == chatState.currentSessionId }
+                            ?.title
+                            ?.takeIf { it.isNotBlank() }
+                            ?: "New conversation"
+                    } else {
+                        tabTitle
+                    },
+                    onProfileClick = { selectedTab = TAB_SETTINGS },
+                    actions = if (selectedTab == TAB_CHAT) {
+                        {
+                            IconButton(onClick = chatViewModel::toggleSessionDrawer) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.MenuOpen,
+                                    contentDescription = "Conversations"
+                                )
+                            }
+                            IconButton(onClick = chatViewModel::createNewSession) {
+                                Icon(Icons.Default.Add, contentDescription = "New chat")
+                            }
+                            IconButton(onClick = chatViewModel::clearChat) {
+                                Icon(
+                                    Icons.Default.DeleteOutline,
+                                    contentDescription = "Clear chat history"
+                                )
+                            }
                         }
-                        IconButton(onClick = chatViewModel::createNewSession) {
-                            Icon(Icons.Default.Add, contentDescription = "New chat")
-                        }
-                        IconButton(onClick = chatViewModel::clearChat) {
-                            Icon(
-                                Icons.Default.DeleteOutline,
-                                contentDescription = "Clear chat history"
-                            )
-                        }
-                    }
-                } else null
-            )
+                    } else null
+                )
+            }
         },
         bottomBar = {
             if (selectedTab in 0..3) {
@@ -175,7 +185,7 @@ fun MainAppScreen(
                 )
             }
         },
-        containerColor = AuraTokens.SurfaceLight
+        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -195,6 +205,8 @@ fun MainAppScreen(
                 TAB_SKILLS -> SkillsScreen(
                     skillLoader = skillLoader,
                     mcpRegistry = mcpRegistry,
+                    pluginRegistry = pluginRegistry,
+                    pluginPermissionStore = pluginPermissionStore,
                     userSkillStore = userSkillStore,
                     onNavigateBack = { selectedTab = TAB_CHAT }
                 )

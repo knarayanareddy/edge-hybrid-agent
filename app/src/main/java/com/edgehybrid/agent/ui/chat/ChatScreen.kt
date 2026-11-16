@@ -3,6 +3,7 @@ package com.edgehybrid.agent.ui.chat
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
@@ -10,6 +11,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +37,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -46,13 +49,16 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -69,6 +75,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -160,15 +167,31 @@ fun ChatScreen(
     onOpenInfoBox: () -> Unit = {}
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
+    var voiceMode by rememberSaveable { mutableStateOf(false) }
     var attachedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var attachedDataUrl by remember { mutableStateOf<String?>(null) }
     var attachedAudioName by remember { mutableStateOf<String?>(null) }
     var attachedAudioBytes by remember { mutableStateOf<ByteArray?>(null) }
     var isTranscribingAudio by remember { mutableStateOf(false) }
     var audioTranscriptionError by remember { mutableStateOf<String?>(null) }
+    var attachedDocumentName by remember { mutableStateOf<String?>(null) }
+    var attachedDocumentText by remember { mutableStateOf<String?>(null) }
+    var documentError by remember { mutableStateOf<String?>(null) }
+    var voiceTurnPending by remember { mutableStateOf(false) }
+    var lastAutoSpokenId by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var ttsReady by remember { mutableStateOf(false) }
+    val textToSpeech = remember(context) {
+        TextToSpeech(context) { status -> ttsReady = status == TextToSpeech.SUCCESS }
+    }
+    DisposableEffect(textToSpeech) {
+        onDispose {
+            textToSpeech.stop()
+            textToSpeech.shutdown()
+        }
+    }
     val promptEnricher = remember { MultimodalPromptEnricher(ImageCompressor()) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
@@ -197,6 +220,48 @@ fun ChatScreen(
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
                         audioTranscriptionError = "Failed to open audio: ${e.message}"
+                    }
+                }
+            }
+        }
+    }
+
+    // Local document picker. The file is read on-device and only bounded extracted text
+    // enters the prompt; the original document is never uploaded as a file.
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { selected ->
+            scope.launch(Dispatchers.IO) {
+                try {
+                    var fileName = "document"
+                    context.contentResolver.query(selected, null, null, null, null)?.use { cursor ->
+                        val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (column >= 0 && cursor.moveToFirst()) fileName = cursor.getString(column) ?: fileName
+                    }
+                    val mime = context.contentResolver.getType(selected)
+                    val bytes = context.contentResolver.openInputStream(selected)?.use { input ->
+                        val output = java.io.ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        var total = 0
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            require(total <= DocumentTextExtractor.MAX_FILE_BYTES) { "Files must be 8 MB or smaller." }
+                            output.write(buffer, 0, count)
+                        }
+                        output.toByteArray()
+                    } ?: throw IllegalArgumentException("Could not open the selected file.")
+                    val extracted = DocumentTextExtractor.extract(fileName, mime, bytes)
+                    withContext(Dispatchers.Main) {
+                        attachedDocumentName = fileName
+                        attachedDocumentText = extracted
+                        documentError = null
+                    }
+                } catch (failure: Exception) {
+                    withContext(Dispatchers.Main) {
+                        documentError = failure.message ?: "Could not read this document."
                     }
                 }
             }
@@ -247,12 +312,25 @@ fun ChatScreen(
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-            if (!spoken.isNullOrBlank()) {
-                draft = if (draft.isBlank()) spoken else "$draft $spoken"
-            }
+        val spoken = if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        } else null
+        if (!spoken.isNullOrBlank() && voiceTurnPending && voiceMode) {
+            val basePrompt = listOf(draft.trim(), spoken.trim()).filter(String::isNotBlank).joinToString(" ")
+            val finalPrompt = if (attachedDocumentText != null && attachedDocumentName != null) {
+                "$basePrompt\n\n[Attached document: $attachedDocumentName]\n\n$DOCUMENT_TEXT_MARKER\n$attachedDocumentText\n[End attached document]"
+            } else basePrompt
+            onSend(finalPrompt, attachedDataUrl)
+            draft = ""
+            attachedBitmap = null
+            attachedDataUrl = null
+            attachedDocumentName = null
+            attachedDocumentText = null
+            documentError = null
+        } else if (!spoken.isNullOrBlank()) {
+            draft = if (draft.isBlank()) spoken else "$draft $spoken"
         }
+        voiceTurnPending = false
     }
 
     val lastMessageSignature = state.messages.lastOrNull()?.let { message ->
@@ -262,6 +340,19 @@ fun ChatScreen(
     LaunchedEffect(lastMessageSignature, state.messages.size) {
         if (state.messages.isNotEmpty()) {
             listState.animateScrollToItem(state.messages.lastIndex)
+        }
+    }
+
+    val completedAssistant = state.messages.lastOrNull()?.takeIf {
+        it.role == ChatMessageRole.ASSISTANT && it.deliveryState == MessageDeliveryState.COMPLETE
+    }
+    LaunchedEffect(voiceMode, ttsReady, completedAssistant?.id) {
+        if (voiceMode && ttsReady && completedAssistant != null && lastAutoSpokenId != completedAssistant.id) {
+            lastAutoSpokenId = completedAssistant.id
+            val spokenText = ReasoningParser.parse(completedAssistant.content).cleanedAnswerText
+            if (spokenText.isNotBlank()) {
+                textToSpeech.speak(spokenText, TextToSpeech.QUEUE_FLUSH, null, "voice_${completedAssistant.id}")
+            }
         }
     }
 
@@ -282,15 +373,8 @@ fun ChatScreen(
 
             if (state.messages.isEmpty()) {
                 com.edgehybrid.agent.ui.chats.ChatsLandingView(
-                    sessions = state.sessions,
-                    onSelectSession = onSelectSession,
-                    onStartNewChat = onNewChat,
-                    onLaunchCamera = {
-                        onSend("Please open the camera viewfinder", null)
-                    },
-                    onSendPrompt = { prompt ->
-                        onSend(prompt, null)
-                    },
+                    onLaunchCamera = { cameraLauncher.launch(null) },
+                    onSendPrompt = { prompt -> onSend(prompt, null) },
                     modifier = Modifier.weight(1f)
                 )
             } else {
@@ -308,7 +392,13 @@ fun ChatScreen(
                     ) { message ->
                         MessageBubble(
                             message = message,
-                            onRetry = onRetry
+                            onRetry = onRetry,
+                            onSpeak = {
+                                if (ttsReady) {
+                                    textToSpeech.stop()
+                                    textToSpeech.speak(message.content, TextToSpeech.QUEUE_FLUSH, null, "reply_${message.id}")
+                                }
+                            }
                         )
                     }
                 }
@@ -338,6 +428,13 @@ fun ChatScreen(
                 isGenerating = state.isGenerating,
                 attachedBitmap = attachedBitmap,
                 attachedAudioName = attachedAudioName,
+                attachedDocumentName = attachedDocumentName,
+                documentError = documentError,
+                voiceModeEnabled = voiceMode,
+                onToggleVoiceMode = {
+                    if (voiceMode) textToSpeech.stop() else lastAutoSpokenId = completedAssistant?.id
+                    voiceMode = !voiceMode
+                },
                 isTranscribingAudio = isTranscribingAudio,
                 audioTranscriptionError = audioTranscriptionError,
                 onCancel = onCancel,
@@ -347,6 +444,17 @@ fun ChatScreen(
                 },
                 onPickPhoto = { photoPickerLauncher.launch("image/*") },
                 onPickAudio = { audioPickerLauncher.launch("audio/*") },
+                onPickDocument = {
+                    documentPickerLauncher.launch(arrayOf(
+                        "application/pdf",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "text/*",
+                        "application/json",
+                        "application/xml",
+                        "application/octet-stream"
+                    ))
+                },
+                onRemoveDocument = { attachedDocumentName = null; attachedDocumentText = null; documentError = null },
                 onTranscribeAudio = {
                     val bytes = attachedAudioBytes
                     val name = attachedAudioName ?: "meeting.m4a"
@@ -377,26 +485,36 @@ fun ChatScreen(
                 },
                 onTakePhoto = { cameraLauncher.launch(null) },
                 onStartSpeechToText = {
+                    if (voiceMode) textToSpeech.stop()
+                    voiceTurnPending = voiceMode
                     val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                         putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to Edge Hybrid Agent...")
                     }
                     try {
                         speechLauncher.launch(intent)
-                    } catch (_: ActivityNotFoundException) {}
+                    } catch (_: ActivityNotFoundException) {
+                        voiceTurnPending = false
+                    }
                 },
                 onDraftChanged = { draft = it },
                 onSend = {
-                    if ((draft.isNotBlank() || attachedDataUrl != null) && !state.isGenerating) {
-                        val textToSend = if (draft.isBlank() && attachedDataUrl != null) {
-                            "Analyze this image in detail and describe what you see."
-                        } else {
-                            draft
+                    if ((draft.isNotBlank() || attachedDataUrl != null || attachedDocumentText != null) && !state.isGenerating) {
+                        val basePrompt = when {
+                            draft.isNotBlank() -> draft.trim()
+                            attachedDataUrl != null -> "Analyze this image in detail and describe what you see."
+                            else -> "Summarize this document and answer questions about it."
                         }
+                        val textToSend = if (attachedDocumentText != null && attachedDocumentName != null) {
+                            "$basePrompt\n\n[Attached document: $attachedDocumentName]\n\n${DOCUMENT_TEXT_MARKER}\n$attachedDocumentText\n[End attached document]"
+                        } else basePrompt
                         onSend(textToSend, attachedDataUrl)
                         draft = ""
                         attachedBitmap = null
                         attachedDataUrl = null
+                        attachedDocumentName = null
+                        attachedDocumentText = null
+                        documentError = null
                     }
                 }
             )
@@ -567,12 +685,20 @@ fun ChatScreen(
     }
 }
 
+private const val DOCUMENT_TEXT_MARKER = "[Document content starts below]"
+
 @Composable
 private fun MessageBubble(
     message: ChatMessageUi,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onSpeak: () -> Unit = {}
 ) {
     val isUser = message.role == ChatMessageRole.USER
+    val context = LocalContext.current
+    val visibleContent = remember(message.content, isUser) {
+        if (isUser) message.content.substringBefore("\n\n$DOCUMENT_TEXT_MARKER").trimEnd()
+        else message.content
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -652,9 +778,9 @@ private fun MessageBubble(
 
                 val parsedContent = remember(message.content, isUser) {
                     if (isUser) {
-                        ReasoningParser.parse(message.content)
+                        ReasoningParser.parse(visibleContent)
                     } else {
-                        ReasoningParser.parse(message.content)
+                        ReasoningParser.parse(visibleContent)
                     }
                 }
 
@@ -667,22 +793,33 @@ private fun MessageBubble(
                     // Assistant replies are markdown; user input is not. Rendering both
                     // through the same parser would italicise a user's `snake_case`
                     // and turn a typed `**` into stray styling.
-                    Text(
-                        text = if (isUser) {
-                            AnnotatedString(message.content)
-                        } else {
-                            MarkdownRenderer.markdown(
-                                parsedContent.cleanedAnswerText,
-                                MaterialTheme.typography.bodyLarge.fontSize
-                            )
-                        },
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            // ChatGPT-sized measure: 1.55 on a 16sp base reads as
-                            // set body copy rather than the 1.0 default, which is
-                            // why dense assistant replies looked cramped.
-                            lineHeight = MaterialTheme.typography.bodyLarge.fontSize * 1.55f
-                        )
+                    val answerStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = if (isUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                        lineHeight = MaterialTheme.typography.bodyLarge.fontSize * 1.55f
                     )
+                    if (isUser) {
+                        Text(text = AnnotatedString(visibleContent), style = answerStyle)
+                    } else {
+                        val annotatedAnswer = MarkdownRenderer.markdown(
+                            parsedContent.cleanedAnswerText,
+                            MaterialTheme.typography.bodyLarge.fontSize
+                        )
+                        ClickableText(
+                            text = annotatedAnswer,
+                            style = answerStyle,
+                            onClick = { offset ->
+                                annotatedAnswer.getStringAnnotations("URL", offset, offset)
+                                    .firstOrNull()?.item?.let { rawUrl ->
+                                        val uri = runCatching { Uri.parse(rawUrl) }.getOrNull()
+                                        if (uri?.scheme == "https" || uri?.scheme == "http") {
+                                            runCatching {
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                            }
+                                        }
+                                    }
+                            }
+                        )
+                    }
                 }
 
                 // ChatGPT-style interactive tool execution cards
@@ -697,7 +834,8 @@ private fun MessageBubble(
                 if (!isUser && message.deliveryState == MessageDeliveryState.COMPLETE) {
                     MessageActionBar(
                         contentToCopy = parsedContent.cleanedAnswerText,
-                        onRegenerate = onRetry
+                        onRegenerate = onRetry,
+                        onSpeak = onSpeak
                     )
                 }
 
@@ -775,12 +913,18 @@ private fun MessageComposer(
     isGenerating: Boolean = false,
     attachedBitmap: Bitmap?,
     attachedAudioName: String? = null,
+    attachedDocumentName: String? = null,
+    documentError: String? = null,
+    voiceModeEnabled: Boolean = false,
+    onToggleVoiceMode: () -> Unit = {},
     isTranscribingAudio: Boolean = false,
     audioTranscriptionError: String? = null,
     onCancel: () -> Unit = {},
     onRemoveAttachment: () -> Unit,
     onPickPhoto: () -> Unit,
     onPickAudio: () -> Unit = {},
+    onPickDocument: () -> Unit = {},
+    onRemoveDocument: () -> Unit = {},
     onTranscribeAudio: () -> Unit = {},
     onRemoveAudio: () -> Unit = {},
     onTakePhoto: () -> Unit,
@@ -789,6 +933,7 @@ private fun MessageComposer(
     onSend: () -> Unit
 ) {
     val haptics = LocalHapticFeedback.current
+    var showAttachmentMenu by remember { mutableStateOf(false) }
 
     // Apple-style floating composer: a rounded field that sits ON the canvas with a
     // hairline ring, instead of a full-bleed raised slab. The removal of
@@ -915,6 +1060,39 @@ private fun MessageComposer(
                 }
             }
 
+            if (attachedDocumentName != null) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(attachedDocumentName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Text("Text extracted on this device · not uploaded as a file", style = MaterialTheme.typography.labelSmall)
+                        }
+                        IconButton(onClick = onRemoveDocument, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove document", modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+            documentError?.let { error ->
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+                ) {
+                    Text(error, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(8.dp))
+                }
+            }
+
             // Audio Transcription Error Banner
             if (audioTranscriptionError != null) {
                 Surface(
@@ -939,38 +1117,63 @@ private fun MessageComposer(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Gallery Attachment Icon
-                IconButton(
-                    onClick = onPickPhoto,
-                    enabled = enabled,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "Attach photo from gallery",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                // Keep the composer uncluttered: attachment options live in one menu,
+                // while the microphone remains a direct, predictable action.
+                Box {
+                    IconButton(
+                        onClick = { showAttachmentMenu = true },
+                        enabled = enabled,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Add an attachment",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showAttachmentMenu,
+                        onDismissRequest = { showAttachmentMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Choose a photo") },
+                            onClick = { showAttachmentMenu = false; onPickPhoto() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Take a photo") },
+                            onClick = { showAttachmentMenu = false; onTakePhoto() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Attach a document") },
+                            onClick = { showAttachmentMenu = false; onPickDocument() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Add meeting audio") },
+                            onClick = { showAttachmentMenu = false; onPickAudio() }
+                        )
+                    }
                 }
 
-                // Meeting Recording Audio Attachment Icon
-                IconButton(
-                    onClick = onPickAudio,
-                    enabled = enabled,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Text("🎙️", fontSize = 18.sp)
-                }
-
-                // Microphone / Speech-to-Text Icon
                 IconButton(
                     onClick = onStartSpeechToText,
                     enabled = enabled,
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        Icons.Default.PlayArrow,
-                        contentDescription = "Speak to agent (Voice Input)",
-                        tint = MaterialTheme.colorScheme.secondary
+                        Icons.Default.Mic,
+                        contentDescription = if (voiceModeEnabled) "Speak and send a voice turn" else "Dictate a message",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(
+                    onClick = onToggleVoiceMode,
+                    enabled = enabled,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.VolumeUp,
+                        contentDescription = if (voiceModeEnabled) "Turn voice chat off" else "Turn voice chat on",
+                        tint = if (voiceModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -987,14 +1190,15 @@ private fun MessageComposer(
                     decorationBox = { inner ->
                         if (draft.isEmpty()) {
                             Text(
-                                text = if (attachedBitmap != null) {
-                                    "Ask about this photo or request OCR..."
-                                } else {
+                                text = when {
+                                    attachedBitmap != null -> "Ask about this photo"
+                                    attachedDocumentName != null -> "Ask about this document"
+                                    else ->
                                     stringResource(R.string.chat_input_hint)
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2
+                                maxLines = 1
                             )
                         }
                         inner()
@@ -1002,7 +1206,7 @@ private fun MessageComposer(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(
                         onSend = {
-                            if ((draft.isNotBlank() || attachedBitmap != null) && enabled) {
+                            if ((draft.isNotBlank() || attachedBitmap != null || attachedDocumentName != null) && enabled) {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onSend()
                             }
@@ -1014,7 +1218,7 @@ private fun MessageComposer(
                 // Compact and icon-led. The previous full-size Button was ~48dp tall
                 // inside a 36dp row, so it broke out of the pill's rounded end and
                 // pushed the layout wider than the screen.
-                val canSend = enabled && (draft.isNotBlank() || attachedBitmap != null)
+                val canSend = enabled && (draft.isNotBlank() || attachedBitmap != null || attachedDocumentName != null)
                 if (isGenerating) {
                     FilledIconButton(
                         onClick = {

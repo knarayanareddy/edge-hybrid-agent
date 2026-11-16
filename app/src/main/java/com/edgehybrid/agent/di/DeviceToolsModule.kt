@@ -94,7 +94,8 @@ object DeviceToolsModule {
     @Singleton
     fun providePluginRegistry(
         httpClient: io.ktor.client.HttpClient,
-        keyStore: com.edgehybrid.agent.data.local.SecureKeyStore
+        keyStore: com.edgehybrid.agent.data.local.SecureKeyStore,
+        @ApplicationContext context: Context
     ): com.edgehybrid.agent.plugins.PluginRegistry =
-        com.edgehybrid.agent.plugins.PluginRegistry(httpClient, keyStore)
+        com.edgehybrid.agent.plugins.PluginRegistry(httpClient, keyStore, context)
 }

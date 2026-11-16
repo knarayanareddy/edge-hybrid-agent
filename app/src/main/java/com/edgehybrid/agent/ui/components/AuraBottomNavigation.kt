@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -39,7 +40,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.edgehybrid.agent.ui.theme.AuraTokens
 
 data class AuraNavDestination(
     val title: String,
@@ -82,15 +82,15 @@ fun AuraBottomNavigationBar(
                     shape = RoundedCornerShape(100.dp),
                     spotColor = Color(0x22000000)
                 )
-                .background(AuraTokens.SurfaceLight.copy(alpha = 0.92f), RoundedCornerShape(100.dp))
-                .border(1.dp, AuraTokens.SurfaceSunkenLight, RoundedCornerShape(100.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.96f), RoundedCornerShape(100.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(100.dp))
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceAround
         ) {
             AuraDestinations.forEachIndexed { index, destination ->
                 val isSelected = selectedTab == index
-                val color = if (isSelected) AuraTokens.Accent else AuraTokens.TextSecondaryLight
+                val color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 val icon = if (isSelected) destination.selectedIcon else destination.unselectedIcon
 
                 Column(

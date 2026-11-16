@@ -84,17 +84,24 @@ class ConfirmationGate @Inject constructor(
      */
     fun gate(call: ModelToolCall, isRemote: Boolean = false): GateResult {
         val toolName = call.function.name
+        val pluginId = toolGateway.pluginIdForTool(toolName)
+        val pluginTrust = pluginId?.let(permissionStore::getTrustLevel)
+        if (pluginTrust == com.edgehybrid.agent.plugins.PluginPermissionStore.TrustLevel.DENY) {
+            return GateResult.Rejected("This integration is blocked in Skills & Integrations settings.")
+        }
         val remoteAutoApproved = isRemote && (
             permissionStore.isAutoApproved(toolName) ||
             permissionStore.isAutoApproved(toolName.substringBefore('_'))
         )
         val tier = when {
+            pluginTrust == com.edgehybrid.agent.plugins.PluginPermissionStore.TrustLevel.ALWAYS_ALLOW ->
+                ActionRiskTier.AUTO_APPROVE
             remoteAutoApproved -> ActionRiskTier.AUTO_APPROVE
             isRemote -> ActionRiskTier.CONFIRM
             else -> policy.tierFor(toolName)
         }
 
-        val execute: suspend () -> String = if (isRemote) {
+        val execute: suspend () -> String = if (isRemote || pluginId != null) {
             { toolGateway.execute(call, toolGateway.loadCatalog()).content }
         } else {
             { skillLoader.execute(call).content }
@@ -109,8 +116,8 @@ class ConfirmationGate @Inject constructor(
 
         val confirmation = registry.register(
             tool = toolName,
-            title = titleFor(toolName, isRemote),
-            summary = summaryFor(toolName, isRemote),
+            title = if (pluginId != null) "OpenAPI integration · $pluginId" else titleFor(toolName, isRemote),
+            summary = if (pluginId != null) "Run this action on the connected ${pluginId} service?" else summaryFor(toolName, isRemote),
             tier = tier,
             details = detailsFor(toolName, call.function.arguments),
             warning = warningFor(tier, isRemote),

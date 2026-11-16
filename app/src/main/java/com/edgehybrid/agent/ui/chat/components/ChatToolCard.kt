@@ -190,6 +190,14 @@ fun ChatToolCard(
 
                     Spacer(modifier = Modifier.padding(vertical = 2.dp))
 
+                    if (activity.toolName.contains('_')) {
+                        Text(
+                            text = if (activity.toolName.substringBefore('_').contains("plugin", ignoreCase = true))
+                                "OpenAPI integration" else "Tool call",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Text(
                         text = "Call ID: ${activity.callId.take(12)}…",
                         style = MaterialTheme.typography.bodySmall.copy(
@@ -198,6 +206,21 @@ fun ChatToolCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
+                    if (activity.resultPreview.isNotBlank()) {
+                        Spacer(modifier = Modifier.padding(vertical = 2.dp))
+                        Text(
+                            text = "Result",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = activity.resultPreview,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 8
+                        )
+                    }
                 }
             }
         }

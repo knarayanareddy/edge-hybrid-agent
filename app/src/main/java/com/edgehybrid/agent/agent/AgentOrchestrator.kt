@@ -286,7 +286,8 @@ class AgentOrchestrator @Inject constructor(
                 AgentStreamEvent.ToolExecutionCompleted(
                     callId = call.id,
                     toolName = call.function.name,
-                    succeeded = !outcome.isError
+                    succeeded = !outcome.isError,
+                    resultPreview = outcome.content.take(800)
                 )
             )
             workingHistory += ChatMessage(
@@ -409,12 +410,21 @@ class AgentOrchestrator @Inject constructor(
 
     private fun Exception.toUserMessage(): String =
         when (this) {
+            is MissingProviderApiKeyException ->
+                "No $providerName API key is configured. Add a key in Settings or rebuild with the matching provider key."
+
             is ProviderHttpException -> when (statusCode) {
-                401, 403 -> "The cloud provider rejected the application credentials."
-                429 -> "The cloud provider is rate limiting requests. Try again shortly."
-                503 -> "The cloud provider is temporarily overloaded. Try again shortly."
-                else -> "The cloud provider returned HTTP $statusCode."
+                400 -> "The provider rejected this request. Check the selected model and provider settings."
+                401, 403 -> "The provider rejected the API key. Check that the key belongs to the selected provider."
+                402 -> "The provider account has no available balance or quota. Check the account or select a free model."
+                404 -> "The selected model or endpoint was not found. Check the model ID for this provider."
+                429 -> "The provider is rate limiting requests. Wait a moment, then retry."
+                in 500..599 -> "The provider is temporarily unavailable (HTTP $statusCode). Try again shortly."
+                else -> "The provider returned HTTP $statusCode. Check the selected model and provider settings."
             }
+
+            is ProviderProtocolException ->
+                "The provider returned an unsupported response. Check the selected model/provider, then retry."
 
             is AgentDisconnectedException ->
                 "The network connection was interrupted. Retry to continue."
@@ -422,7 +432,12 @@ class AgentOrchestrator @Inject constructor(
             is java.io.IOException ->
                 "The network is unavailable. Check connectivity and retry."
 
-            else -> "The agent could not complete the request."
+            else -> {
+                // Do not expose request bodies, headers, or credential-bearing URLs. A short
+                // exception category is enough to make previously opaque failures actionable.
+                val category = javaClass.simpleName.takeIf(String::isNotBlank) ?: "Unexpected error"
+                "The request failed ($category). Check provider/model settings and try again."
+            }
         }
 
     private class UsageAccumulator {

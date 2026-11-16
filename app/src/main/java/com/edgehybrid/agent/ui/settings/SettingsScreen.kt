@@ -43,7 +43,6 @@ fun SettingsScreen(
     var telegramChatId by remember { mutableStateOf(keyStore.getTelegramChatId()) }
     var selectedModel by remember { mutableStateOf(keyStore.getSelectedCloudModel()) }
     var jevEnabled by remember { mutableStateOf(keyStore.isJevRoutingEnabled()) }
-    var localFallbackEnabled by remember { mutableStateOf(keyStore.isLocalFallbackEnabled()) }
 
     /** "openrouter" | "google_ai_studio" */
     var preferredProvider by remember { mutableStateOf(keyStore.getPreferredProvider()) }
@@ -329,7 +328,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("JEV System 1 Smart Routing", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Intelligently routes prompts to on-device LiteRT or cloud models",
+                            "Applies prompt risk and complexity checks. Chat inference currently uses the selected cloud provider.",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -339,20 +338,19 @@ fun SettingsScreen(
             }
 
             item {
-                Row(
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Local LiteRT Engine Fallback", fontWeight = FontWeight.SemiBold)
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("On-device model: not configured", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Allows running lightweight tasks offline via MediaPipe/LiteRT",
+                            "This build sends chat requests to the selected cloud provider. Offline LiteRT inference is not wired up yet; this status avoids implying that the saved legacy fallback switch works.",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Switch(checked = localFallbackEnabled, onCheckedChange = { localFallbackEnabled = it })
                 }
             }
 
@@ -368,7 +366,6 @@ fun SettingsScreen(
                         keyStore.setTelegramChatId(telegramChatId)
                         keyStore.setSelectedCloudModel(selectedModel)
                         keyStore.setJevRoutingEnabled(jevEnabled)
-                        keyStore.setLocalFallbackEnabled(localFallbackEnabled)
                         keyStore.setPreferredProvider(preferredProvider)
                         savedSnackbar = true
                     },

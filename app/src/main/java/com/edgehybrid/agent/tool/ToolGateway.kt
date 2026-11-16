@@ -107,6 +107,9 @@ class ToolGateway @Inject constructor(
         /** Option rubrics stay terse; these are hints, not documentation. */
         const val MAX_DESCRIPTION_CHARS = 120
     }
+    /** Returns the installed OpenAPI integration that owns this dispatched tool. */
+    fun pluginIdForTool(toolName: String): String? = pluginRegistry?.pluginIdForTool(toolName)
+
     suspend fun loadCatalog(): ToolCatalog {
         val localDefinitions = skillLoader.listTools()
         val pluginDefinitions = pluginRegistry?.allToolDefinitions().orEmpty()

@@ -203,6 +203,14 @@ class MarkdownRendererTest {
     }
 
     @Test
+    fun `markdown links carry safe URL annotations for clickable citations`() {
+        val rendered = render("Source: [Wikipedia](https://en.wikipedia.org/wiki/Delft)")
+        val annotation = rendered.getStringAnnotations("URL", 0, rendered.length).single()
+        assertEquals("https://en.wikipedia.org/wiki/Delft", annotation.item)
+        assertTrue(rendered.text.contains("Wikipedia"))
+    }
+
+    @Test
     fun `carriage returns do not survive`() {
         assertFalse(plain("a\r\nb").contains("\r"))
     }

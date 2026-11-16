@@ -257,9 +257,8 @@ class SecureKeyStore @Inject constructor(
      * The provider the app should use.
      *
      * Precedence: a value chosen in Settings, then the provider baked in at build time
-     * (`EDGE_CLOUD_PROVIDER`), then OpenRouter. Without the build-time fallback a fresh
-     * install would always resolve to OpenRouter, so a build configured for Google AI Studio
-     * would silently use the wrong endpoint.
+     * (`EDGE_CLOUD_PROVIDER`), then OpenRouter. OpenRouter is the safe final default because
+     * the generic cloud key and endpoint in this app are OpenRouter credentials.
      *
      * Unrecognised values fall back rather than propagating: a typo should degrade to the
      * default, not produce an unconfigured provider.
@@ -271,14 +270,14 @@ class SecureKeyStore @Inject constructor(
         val buildTime = com.edgehybrid.agent.BuildConfig.CLOUD_PROVIDER
         if (!buildTime.isNullOrBlank()) return normalizeProvider(buildTime)
 
-        return PROVIDER_GOOGLE_AI_STUDIO
+        return PROVIDER_OPENROUTER
     }
 
     /** Maps a provider name onto a supported constant, defaulting to OpenRouter. */
     private fun normalizeProvider(value: String): String = when (value.trim().lowercase()) {
         PROVIDER_GOOGLE_AI_STUDIO -> PROVIDER_GOOGLE_AI_STUDIO
         PROVIDER_OPENROUTER -> PROVIDER_OPENROUTER
-        else -> PROVIDER_GOOGLE_AI_STUDIO
+        else -> PROVIDER_OPENROUTER
     }
 
     fun setPreferredProvider(provider: String) =

@@ -95,6 +95,44 @@ class ProviderResolutionTest {
     }
 
     @Test
+    fun `Google provider never receives the OpenRouter build key when Gemini key is absent`() {
+        assertEquals(
+            null,
+            resolveProviderApiKey(
+                isGoogleAiStudio = true,
+                geminiApiKey = null,
+                openRouterApiKey = "sk-or-build-key",
+                settingsApiKey = "sk-or-build-key",
+                allowLegacyGoogleFallback = false
+            )
+        )
+    }
+
+    @Test
+    fun `each provider resolves only its own stored credential`() {
+        assertEquals(
+            "AIza-gemini",
+            resolveProviderApiKey(
+                isGoogleAiStudio = true,
+                geminiApiKey = "AIza-gemini",
+                openRouterApiKey = "sk-or-key",
+                settingsApiKey = "sk-or-key",
+                allowLegacyGoogleFallback = false
+            )
+        )
+        assertEquals(
+            "sk-or-key",
+            resolveProviderApiKey(
+                isGoogleAiStudio = false,
+                geminiApiKey = "AIza-gemini",
+                openRouterApiKey = "sk-or-key",
+                settingsApiKey = "sk-or-key",
+                allowLegacyGoogleFallback = false
+            )
+        )
+    }
+
+    @Test
     fun `a stored OpenRouter key takes precedence over the build-time one`() {
         val result = resolve(
             preferredProvider = SecureKeyStore.PROVIDER_OPENROUTER,
@@ -121,7 +159,7 @@ class ProviderResolutionTest {
     }
 
     @Test
-    fun `Google AI Studio uses its own endpoint and sends the key as a query param`() {
+    fun `Google AI Studio uses its own endpoint and bearer authentication`() {
         val result = resolve(
             preferredProvider = SecureKeyStore.PROVIDER_GOOGLE_AI_STUDIO,
             openRouterKey = "sk-or-should-be-ignored",

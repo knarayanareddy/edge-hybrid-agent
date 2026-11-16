@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
@@ -59,8 +60,8 @@ import com.edgehybrid.agent.tool.SkillLoader
  * This screen deliberately does not maintain its own copy of either, so it cannot drift
  * out of step with what the agent will really dispatch.
  *
- * MCP servers are toggled in Settings (Tools → MCP Servers); this screen is read-only for
- * them so there is exactly one place a server can be enabled.
+ * MCP servers are managed from this hub through the same registry the tool router reads,
+ * so connection switches take effect without maintaining a parallel UI-only state.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +69,8 @@ fun SkillsScreen(
     skillLoader: SkillLoader,
     mcpRegistry: McpServerRegistry,
     userSkillStore: com.edgehybrid.agent.skills.UserSkillStore,
+    pluginRegistry: com.edgehybrid.agent.plugins.PluginRegistry,
+    pluginPermissionStore: com.edgehybrid.agent.plugins.PluginPermissionStore,
     onNavigateBack: () -> Unit
 ) {
     // Tool discovery is a suspend call (it may query MCP servers), so it is loaded in an
@@ -93,14 +96,26 @@ fun SkillsScreen(
     var saveErrors by remember { mutableStateOf<List<String>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
-    val catalog = remember(mcpRegistry) { mcpRegistry.catalog() }
+    var mcpRefresh by remember { mutableStateOf(0) }
+    var mcpCredentialFor by remember { mutableStateOf<McpServerEntry?>(null) }
+    val catalog = remember(mcpRegistry, mcpRefresh) { mcpRegistry.catalog() }
     val servers = catalog.servers
     val enabledCount = catalog.enabledCount
+    var searchQuery by remember { mutableStateOf("") }
+    val matchingSkills = userSkills.distinctBy { it.id }.filter {
+        searchQuery.isBlank() || it.name.contains(searchQuery, true) || it.description.contains(searchQuery, true)
+    }
+    val matchingTools = tools.distinctBy { it.function.name }.filter {
+        searchQuery.isBlank() || it.function.name.contains(searchQuery, true) || it.function.description.contains(searchQuery, true)
+    }
+    val matchingServers = servers.distinctBy { it.id }.filter {
+        searchQuery.isBlank() || it.name.contains(searchQuery, true) || it.description.contains(searchQuery, true) || it.url.contains(searchQuery, true)
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Tools & MCP Servers") },
+                title = { Text("Skills & Integrations") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -116,6 +131,16 @@ fun SkillsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Search skills, tools, servers, integrations") }
+                )
+            }
+
             loadError?.let { error ->
                 item { Text("Could not load tools: $error", color = MaterialTheme.colorScheme.error) }
             }
@@ -181,7 +206,7 @@ fun SkillsScreen(
                 }
             }
 
-            items(userSkills.distinctBy { it.id }, key = { "skill_${it.id}" }) { skill ->
+            items(matchingSkills, key = { "skill_${it.id}" }) { skill ->
                 UserSkillRow(
                     skill = skill,
                     onToggle = { enabled ->
@@ -224,7 +249,7 @@ fun SkillsScreen(
                 )
             }
 
-            items(tools.distinctBy { it.function.name }, key = { "tool_${it.function.name}" }) { tool ->
+            items(matchingTools, key = { "tool_${it.function.name}" }) { tool ->
                 ToolRow(tool)
             }
 
@@ -237,8 +262,8 @@ fun SkillsScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Managed in Tools → MCP Servers. Disabled servers contribute " +
-                            "no tools.",
+                        text = "Enable only servers you trust. Disabled servers contribute " +
+                            "no tools or network requests.",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -261,10 +286,39 @@ fun SkillsScreen(
                 }
             }
 
-            items(servers.distinctBy { it.id }, key = { "server_${it.id}" }) { server ->
-                McpServerRow(server)
+            items(matchingServers, key = { "server_${it.id}" }) { server ->
+                McpServerRow(
+                    server = server,
+                    hasCredential = mcpRegistry.hasToken(server.id),
+                    onToggle = { enabled ->
+                        if (enabled) mcpRegistry.enable(server.id) else mcpRegistry.disable(server.id)
+                        mcpRefresh++
+                    },
+                    onCredential = { mcpCredentialFor = server }
+                )
+            }
+
+            item {
+                OpenApiIntegrationsSection(
+                    registry = pluginRegistry,
+                    permissions = pluginPermissionStore,
+                    query = searchQuery
+                )
             }
         }
+    }
+
+    mcpCredentialFor?.let { server ->
+        McpCredentialDialog(
+            server = server,
+            onDismiss = { mcpCredentialFor = null },
+            onSave = { token ->
+                if (token.isBlank()) mcpRegistry.clearToken(server.id)
+                else mcpRegistry.setToken(server.id, token)
+                mcpCredentialFor = null
+                mcpRefresh++
+            }
+        )
     }
 }
 
@@ -295,7 +349,12 @@ private fun ToolRow(tool: ToolDefinition) {
 }
 
 @Composable
-private fun McpServerRow(server: McpServerEntry) {
+private fun McpServerRow(
+    server: McpServerEntry,
+    hasCredential: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onCredential: () -> Unit
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -309,15 +368,7 @@ private fun McpServerRow(server: McpServerEntry) {
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = if (server.enabled) "Enabled" else "Disabled",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (server.enabled) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
+                Switch(checked = server.enabled, onCheckedChange = onToggle)
             }
             Text(
                 text = server.url,
@@ -332,8 +383,35 @@ private fun McpServerRow(server: McpServerEntry) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            Text(
+                text = if (server.requiresApiKey && !hasCredential) "Credential required before this server can work" else if (server.enabled) "Enabled · available to the agent" else "Disabled · no server requests will be made",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (server.requiresApiKey && !hasCredential) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = onCredential) { Text(if (hasCredential) "Update credential" else "Add credential") }
         }
     }
+}
+
+@Composable
+private fun McpCredentialDialog(
+    server: McpServerEntry,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var token by remember(server.id) { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Credential · ${server.name}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Stored in encrypted device storage and never shown to the model.", style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(token, { token = it }, label = { Text("Bearer token (blank removes it)") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(token) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable

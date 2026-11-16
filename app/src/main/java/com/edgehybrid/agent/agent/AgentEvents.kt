@@ -41,7 +41,8 @@ sealed interface AgentStreamEvent {
     data class ToolExecutionCompleted(
         val callId: String,
         val toolName: String,
-        val succeeded: Boolean
+        val succeeded: Boolean,
+        val resultPreview: String = ""
     ) : AgentStreamEvent
 
     /**

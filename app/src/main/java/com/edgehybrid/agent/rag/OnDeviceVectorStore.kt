@@ -36,6 +36,10 @@ class OnDeviceVectorStore @Inject constructor() {
             }
         }
 
+    fun removeDocumentsStartingWith(prefix: String) {
+        embeddingsMap.keys.removeIf { it.startsWith(prefix) }
+    }
+
     fun size(): Int = embeddingsMap.size
 
     fun clear() {

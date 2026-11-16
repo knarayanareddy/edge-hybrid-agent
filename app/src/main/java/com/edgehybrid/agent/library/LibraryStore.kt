@@ -53,6 +53,17 @@ class LibraryStore(
         _items.value = emptyList()
     }
 
+    /** Rebuild the process-local index after Library items are restored from disk. */
+    suspend fun ensureRagIndex() {
+        if (vectorStore == null || vectorStore.size() > 0 || _items.value.isEmpty()) return
+        mutex.withLock {
+            if (vectorStore.size() > 0) return@withLock
+            _items.value.forEach { item ->
+                indexItem(item)
+            }
+        }
+    }
+
     suspend fun addItem(item: LibraryItem) = mutex.withLock {
         val current = _items.value.toMutableList()
         current.removeAll { it.id == item.id }
@@ -60,18 +71,22 @@ class LibraryStore(
         _items.value = current
         persist()
 
-        // Index in local RAG vector store if non-empty text content
-        if (item.textContent.isNotBlank() && vectorStore != null) {
-            val chunks = chunkText(item.textContent)
-            val augmenter = com.edgehybrid.agent.rag.RagContextAugmenter(vectorStore)
-            chunks.forEachIndexed { idx, chunk ->
-                val vec = augmenter.createTermVector(chunk, 64)
-                vectorStore.addDocument(
-                    id = "${item.id}_chunk_$idx",
-                    text = chunk,
-                    vector = vec
-                )
-            }
+        indexItem(item)
+    }
+
+    private suspend fun indexItem(item: LibraryItem) {
+        if (vectorStore == null) return
+        vectorStore.removeDocumentsStartingWith("${item.id}_chunk_")
+        if (item.textContent.isBlank()) return
+        val chunks = chunkText(item.textContent)
+        val augmenter = com.edgehybrid.agent.rag.RagContextAugmenter(vectorStore)
+        chunks.forEachIndexed { idx, chunk ->
+            val vec = augmenter.createTermVector(chunk, 64)
+            vectorStore.addDocument(
+                id = "${item.id}_chunk_$idx",
+                text = "[Library: ${item.name}] $chunk",
+                vector = vec
+            )
         }
     }
 
@@ -84,6 +99,7 @@ class LibraryStore(
 
     suspend fun deleteItem(id: String) = mutex.withLock {
         _items.value = _items.value.filter { it.id != id }
+        vectorStore?.removeDocumentsStartingWith("${id}_chunk_")
         persist()
     }
 
