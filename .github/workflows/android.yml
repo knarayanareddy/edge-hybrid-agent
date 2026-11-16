@@ -61,9 +61,11 @@ jobs:
         run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
 
       - name: Lint
+        if: always()
         run: ./gradlew :app:lintDebug --no-daemon --stacktrace
 
       - name: Build debug APK
+        if: always()
         env:
           # Secrets are optional: without them the app still builds and the user can enter
           # keys in Settings. They only pre-seed BuildConfig for convenience.
@@ -81,6 +83,7 @@ jobs:
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Verify credentials are not committed to source
+        if: always()
         # API keys are intentionally baked into this debug APK. This check only guards source control.
         run: |
           if git grep -nE 'sk-or-v1-[a-f0-9]{40,}|apikey_[a-f0-9]{40,}' -- . ; then
@@ -90,6 +93,7 @@ jobs:
           echo "No credentials in tracked files."
 
       - name: Upload APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: EdgeHybridAgent-debug-apk
