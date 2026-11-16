@@ -28,6 +28,7 @@ import javax.inject.Inject
 
 import com.edgehybrid.agent.ui.components.AuraBottomNavigationBar
 import com.edgehybrid.agent.ui.components.AuraHeader
+import com.edgehybrid.agent.ui.theme.AuraTokens
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.material.icons.automirrored.filled.MenuOpen
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -142,40 +143,37 @@ fun MainAppScreen(
 
     Scaffold(
         topBar = {
-            // Feature screens own their own back/title bars. Keep one shared compact
-            // header for Chat and Device Tools rather than stacking duplicate app bars.
-            if (selectedTab == TAB_CHAT || selectedTab == TAB_TOOLS) {
-                AuraHeader(
-                    title = if (selectedTab == TAB_CHAT) {
-                        chatState.sessions.firstOrNull { it.id == chatState.currentSessionId }
-                            ?.title
-                            ?.takeIf { it.isNotBlank() }
-                            ?: "New conversation"
-                    } else {
-                        tabTitle
-                    },
-                    onProfileClick = { selectedTab = TAB_SETTINGS },
-                    actions = if (selectedTab == TAB_CHAT) {
-                        {
-                            IconButton(onClick = chatViewModel::toggleSessionDrawer) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.MenuOpen,
-                                    contentDescription = "Conversations"
-                                )
-                            }
-                            IconButton(onClick = chatViewModel::createNewSession) {
-                                Icon(Icons.Default.Add, contentDescription = "New chat")
-                            }
-                            IconButton(onClick = chatViewModel::clearChat) {
-                                Icon(
-                                    Icons.Default.DeleteOutline,
-                                    contentDescription = "Clear chat history"
-                                )
-                            }
+            AuraHeader(
+                title = if (selectedTab == TAB_CHAT) {
+                    // Show the active conversation title while keeping the original Aura header.
+                    chatState.sessions.firstOrNull { it.id == chatState.currentSessionId }
+                        ?.title
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "New conversation"
+                } else {
+                    tabTitle
+                },
+                onProfileClick = { selectedTab = TAB_SETTINGS },
+                actions = if (selectedTab == TAB_CHAT) {
+                    {
+                        IconButton(onClick = chatViewModel::toggleSessionDrawer) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.MenuOpen,
+                                contentDescription = "Conversations"
+                            )
                         }
-                    } else null
-                )
-            }
+                        IconButton(onClick = chatViewModel::createNewSession) {
+                            Icon(Icons.Default.Add, contentDescription = "New chat")
+                        }
+                        IconButton(onClick = chatViewModel::clearChat) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                contentDescription = "Clear chat history"
+                            )
+                        }
+                    }
+                } else null
+            )
         },
         bottomBar = {
             if (selectedTab in 0..3) {
@@ -185,7 +183,7 @@ fun MainAppScreen(
                 )
             }
         },
-        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background
+        containerColor = AuraTokens.SurfaceLight
     ) { innerPadding ->
         Box(
             modifier = Modifier

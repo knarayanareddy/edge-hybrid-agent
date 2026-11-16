@@ -49,16 +49,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -167,7 +164,6 @@ fun ChatScreen(
     onOpenInfoBox: () -> Unit = {}
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
-    var voiceMode by rememberSaveable { mutableStateOf(false) }
     var attachedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var attachedDataUrl by remember { mutableStateOf<String?>(null) }
     var attachedAudioName by remember { mutableStateOf<String?>(null) }
@@ -177,8 +173,6 @@ fun ChatScreen(
     var attachedDocumentName by remember { mutableStateOf<String?>(null) }
     var attachedDocumentText by remember { mutableStateOf<String?>(null) }
     var documentError by remember { mutableStateOf<String?>(null) }
-    var voiceTurnPending by remember { mutableStateOf(false) }
-    var lastAutoSpokenId by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -312,25 +306,12 @@ fun ChatScreen(
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val spoken = if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        } else null
-        if (!spoken.isNullOrBlank() && voiceTurnPending && voiceMode) {
-            val basePrompt = listOf(draft.trim(), spoken.trim()).filter(String::isNotBlank).joinToString(" ")
-            val finalPrompt = if (attachedDocumentText != null && attachedDocumentName != null) {
-                "$basePrompt\n\n[Attached document: $attachedDocumentName]\n\n$DOCUMENT_TEXT_MARKER\n$attachedDocumentText\n[End attached document]"
-            } else basePrompt
-            onSend(finalPrompt, attachedDataUrl)
-            draft = ""
-            attachedBitmap = null
-            attachedDataUrl = null
-            attachedDocumentName = null
-            attachedDocumentText = null
-            documentError = null
-        } else if (!spoken.isNullOrBlank()) {
-            draft = if (draft.isBlank()) spoken else "$draft $spoken"
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!spoken.isNullOrBlank()) {
+                draft = if (draft.isBlank()) spoken else "$draft $spoken"
+            }
         }
-        voiceTurnPending = false
     }
 
     val lastMessageSignature = state.messages.lastOrNull()?.let { message ->
@@ -340,19 +321,6 @@ fun ChatScreen(
     LaunchedEffect(lastMessageSignature, state.messages.size) {
         if (state.messages.isNotEmpty()) {
             listState.animateScrollToItem(state.messages.lastIndex)
-        }
-    }
-
-    val completedAssistant = state.messages.lastOrNull()?.takeIf {
-        it.role == ChatMessageRole.ASSISTANT && it.deliveryState == MessageDeliveryState.COMPLETE
-    }
-    LaunchedEffect(voiceMode, ttsReady, completedAssistant?.id) {
-        if (voiceMode && ttsReady && completedAssistant != null && lastAutoSpokenId != completedAssistant.id) {
-            lastAutoSpokenId = completedAssistant.id
-            val spokenText = ReasoningParser.parse(completedAssistant.content).cleanedAnswerText
-            if (spokenText.isNotBlank()) {
-                textToSpeech.speak(spokenText, TextToSpeech.QUEUE_FLUSH, null, "voice_${completedAssistant.id}")
-            }
         }
     }
 
@@ -373,6 +341,9 @@ fun ChatScreen(
 
             if (state.messages.isEmpty()) {
                 com.edgehybrid.agent.ui.chats.ChatsLandingView(
+                    sessions = state.sessions,
+                    onSelectSession = onSelectSession,
+                    onStartNewChat = onNewChat,
                     onLaunchCamera = { cameraLauncher.launch(null) },
                     onSendPrompt = { prompt -> onSend(prompt, null) },
                     modifier = Modifier.weight(1f)
@@ -430,11 +401,6 @@ fun ChatScreen(
                 attachedAudioName = attachedAudioName,
                 attachedDocumentName = attachedDocumentName,
                 documentError = documentError,
-                voiceModeEnabled = voiceMode,
-                onToggleVoiceMode = {
-                    if (voiceMode) textToSpeech.stop() else lastAutoSpokenId = completedAssistant?.id
-                    voiceMode = !voiceMode
-                },
                 isTranscribingAudio = isTranscribingAudio,
                 audioTranscriptionError = audioTranscriptionError,
                 onCancel = onCancel,
@@ -485,17 +451,13 @@ fun ChatScreen(
                 },
                 onTakePhoto = { cameraLauncher.launch(null) },
                 onStartSpeechToText = {
-                    if (voiceMode) textToSpeech.stop()
-                    voiceTurnPending = voiceMode
                     val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                         putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to Edge Hybrid Agent...")
                     }
                     try {
                         speechLauncher.launch(intent)
-                    } catch (_: ActivityNotFoundException) {
-                        voiceTurnPending = false
-                    }
+                    } catch (_: ActivityNotFoundException) {}
                 },
                 onDraftChanged = { draft = it },
                 onSend = {
@@ -915,8 +877,6 @@ private fun MessageComposer(
     attachedAudioName: String? = null,
     attachedDocumentName: String? = null,
     documentError: String? = null,
-    voiceModeEnabled: Boolean = false,
-    onToggleVoiceMode: () -> Unit = {},
     isTranscribingAudio: Boolean = false,
     audioTranscriptionError: String? = null,
     onCancel: () -> Unit = {},
@@ -933,7 +893,6 @@ private fun MessageComposer(
     onSend: () -> Unit
 ) {
     val haptics = LocalHapticFeedback.current
-    var showAttachmentMenu by remember { mutableStateOf(false) }
 
     // Apple-style floating composer: a rounded field that sits ON the canvas with a
     // hairline ring, instead of a full-bleed raised slab. The removal of
@@ -1117,63 +1076,45 @@ private fun MessageComposer(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Keep the composer uncluttered: attachment options live in one menu,
-                // while the microphone remains a direct, predictable action.
-                Box {
-                    IconButton(
-                        onClick = { showAttachmentMenu = true },
-                        enabled = enabled,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = "Add an attachment",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showAttachmentMenu,
-                        onDismissRequest = { showAttachmentMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Choose a photo") },
-                            onClick = { showAttachmentMenu = false; onPickPhoto() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Take a photo") },
-                            onClick = { showAttachmentMenu = false; onTakePhoto() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Attach a document") },
-                            onClick = { showAttachmentMenu = false; onPickDocument() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Add meeting audio") },
-                            onClick = { showAttachmentMenu = false; onPickAudio() }
-                        )
-                    }
+                // Keep the original one-tap photo, meeting-audio, and dictation actions.
+                IconButton(
+                    onClick = onPickPhoto,
+                    enabled = enabled,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Attach photo from gallery",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
-
+                IconButton(
+                    onClick = onPickDocument,
+                    enabled = enabled,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Description,
+                        contentDescription = "Attach document",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(
+                    onClick = onPickAudio,
+                    enabled = enabled,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Text("🎙️", fontSize = 18.sp)
+                }
                 IconButton(
                     onClick = onStartSpeechToText,
                     enabled = enabled,
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        Icons.Default.Mic,
-                        contentDescription = if (voiceModeEnabled) "Speak and send a voice turn" else "Dictate a message",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(
-                    onClick = onToggleVoiceMode,
-                    enabled = enabled,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        Icons.Default.VolumeUp,
-                        contentDescription = if (voiceModeEnabled) "Turn voice chat off" else "Turn voice chat on",
-                        tint = if (voiceModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        Icons.Default.PlayArrow,
+                        contentDescription = "Speak to agent (Voice Input)",
+                        tint = MaterialTheme.colorScheme.secondary
                     )
                 }
 
