@@ -58,11 +58,15 @@ jobs:
           restore-keys: ${{ runner.os }}-gradle-
 
       - name: Unit tests
-        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/unit-tests.log"
 
       - name: Lint
         if: always()
-        run: ./gradlew :app:lintDebug --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew :app:lintDebug --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/lint.log"
 
       - name: Build debug APK
         if: always()
@@ -80,7 +84,9 @@ jobs:
           EDGE_CLOUD_PROVIDER: openrouter
           EDGE_TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
           EDGE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/assemble.log"
 
       - name: Verify credentials are not committed to source
         if: always()
@@ -100,6 +106,17 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
           if-no-files-found: error
+
+      - name: Surface concise Gradle diagnostics
+        if: failure()
+        run: |
+          for logfile in "$RUNNER_TEMP/unit-tests.log" "$RUNNER_TEMP/lint.log" "$RUNNER_TEMP/assemble.log"; do
+            [ -f "$logfile" ] || continue
+            details=$(grep -E '(^e: |^FAILURE:|Execution failed for task|^> Task .* FAILED|Failures:|Tests? run:|> .* FAILED)' "$logfile" | tail -n 25 | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')
+            if [ -n "$details" ]; then
+              echo "::error title=Gradle diagnostics (${logfile##*/})::$details"
+            fi
+          done
 
       - name: Upload reports on failure
         if: failure()
