@@ -2,7 +2,7 @@ package com.edgehybrid.agent.ui.chat
 
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.io.InflaterInputStream
+import java.util.zip.InflaterInputStream
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import java.util.zip.ZipInputStream
@@ -13,6 +13,7 @@ import org.w3c.dom.Node
 internal object DocumentTextExtractor {
     const val MAX_FILE_BYTES = 8 * 1024 * 1024
     const val MAX_EXTRACTED_CHARS = 40_000
+    private const val MAX_PDF_STREAM_BYTES = 8 * 1024 * 1024
 
     fun extract(displayName: String, mimeType: String?, bytes: ByteArray): String {
         require(bytes.isNotEmpty()) { "The selected file is empty." }
